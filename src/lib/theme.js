@@ -12,6 +12,7 @@ export const PALETTES = {
     brew: "#452B18",
     hot: "#9E3B24",
     ok: "#3F6B4A",
+    glass: "#FFFFFF",
   },
   dark: {
     paper: "#171813",
@@ -24,6 +25,7 @@ export const PALETTES = {
     brew: "#8A5A31",
     hot: "#E2705A",
     ok: "#6BAE7C",
+    glass: "#000000",
   },
 };
 

@@ -396,11 +396,43 @@ function Button({ children, onClick, variant = "primary", disabled, style }) {
     primary: { background: C.ink, color: C.card, border: `1px solid ${C.ink}` },
     quiet: { background: "transparent", color: C.ink, border: `1px solid ${C.line}` },
     plain: { background: "transparent", color: C.ink2, border: "1px solid transparent", padding: "10px 4px", fontSize: 14 },
+    danger: { background: C.hot, color: C.card, border: `1px solid ${C.hot}` },
   };
   return (
     <button className="cbc-btn" onClick={disabled ? undefined : onClick} disabled={disabled} style={{ ...base, ...skins[variant], ...style }}>
       {children}
     </button>
+  );
+}
+
+function ConfirmDialog({ message, confirmLabel, cancelLabel, danger, onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 10,
+      }}
+      onClick={onCancel}
+    >
+      <div style={{ width: "100%", maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <div style={{ fontSize: 15, lineHeight: 1.5, color: C.ink, marginBottom: 20 }}>{message}</div>
+          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+          <div style={{ height: 8 }} />
+          <Button variant="quiet" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+        </Card>
+      </div>
+    </div>
   );
 }
 
@@ -461,7 +493,7 @@ function BrewGauge({ recipe, poured }) {
           <path d={glass} />
         </clipPath>
       </defs>
-      <path d={glass} fill="#FFFFFF" stroke={C.line} strokeWidth="1.5" />
+      <path d={glass} fill={C.glass} stroke={C.line} strokeWidth="1.5" />
       <g clipPath="url(#cbc-glass)">
         <rect x="0" y={fillY} width="100" height={bottom - fillY + 8} fill={C.brew} style={{ transition: "y 400ms ease" }} />
       </g>
@@ -492,6 +524,7 @@ export default function ChemexBrewCoach() {
   const [lang, setLang] = useLang();
   const T = translations[lang];
   const [authError, setAuthError] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [screen, setScreen] = useState("home");
   const [loaded, setLoaded] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -529,6 +562,14 @@ export default function ChemexBrewCoach() {
     } catch (e) {
       setSaveFailed(true);
     }
+  }
+
+  async function removeBrew(id) {
+    await persist(brews.filter((b) => b.id !== id));
+  }
+
+  async function clearAllBrews() {
+    await persist([]);
   }
 
   /* Klocka */
@@ -704,6 +745,19 @@ export default function ChemexBrewCoach() {
   return (
     <div style={shell} data-theme={theme}>
       {styleTag}
+      {confirmAction && (
+        <ConfirmDialog
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          cancelLabel={T.confirm.cancel}
+          danger={confirmAction.danger}
+          onConfirm={() => {
+            confirmAction.onConfirm();
+            setConfirmAction(null);
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         {/* Sidhuvud */}
@@ -727,7 +781,18 @@ export default function ChemexBrewCoach() {
             <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
               {T.theme[theme === "light" ? "dark" : "light"]}
             </button>
-            <button className="cbc-btn" onClick={() => signOut()} title={user.email || undefined} style={{ ...navBtnStyle, color: C.ink3 }}>
+            <button
+              className="cbc-btn"
+              onClick={() =>
+                setConfirmAction({
+                  message: T.confirm.signOut,
+                  confirmLabel: T.signOut,
+                  onConfirm: () => signOut(),
+                })
+              }
+              title={user.email || undefined}
+              style={{ ...navBtnStyle, color: C.ink3 }}
+            >
               {T.signOut}
             </button>
           </div>
@@ -1167,8 +1232,26 @@ export default function ChemexBrewCoach() {
         {screen === "history" && (
           <div>
             <Card style={{ marginBottom: 12 }}>
-              <Eyebrow>{T.history.eyebrow}</Eyebrow>
-              <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <Eyebrow>{T.history.eyebrow}</Eyebrow>
+                  <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
+                </div>
+                <button
+                  className="cbc-btn"
+                  onClick={() =>
+                    setConfirmAction({
+                      message: T.confirm.clearAll(brews.length),
+                      confirmLabel: T.history.clearAll,
+                      danger: true,
+                      onConfirm: () => clearAllBrews(),
+                    })
+                  }
+                  style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.hot }}
+                >
+                  {T.history.clearAll}
+                </button>
+              </div>
             </Card>
 
             {brews.map((b) => (
@@ -1189,8 +1272,24 @@ export default function ChemexBrewCoach() {
                   {T.history.became} {T.taste[b.feedback.taste]}, {T.flow[b.feedback.flow]}.
                   {b.feedback.comment ? ` ”${b.feedback.comment}”` : ""}
                 </div>
-                <div style={{ fontSize: 13, color: C.ink2, marginTop: 6, lineHeight: 1.5 }}>
-                  {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
+                  <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
+                    {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                  </div>
+                  <button
+                    className="cbc-btn"
+                    onClick={() =>
+                      setConfirmAction({
+                        message: T.confirm.removeOne,
+                        confirmLabel: T.history.remove,
+                        danger: true,
+                        onConfirm: () => removeBrew(b.id),
+                      })
+                    }
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0, marginLeft: 10 }}
+                  >
+                    {T.history.remove}
+                  </button>
                 </div>
               </Card>
             ))}
