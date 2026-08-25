@@ -718,7 +718,7 @@ export default function ChemexBrewCoach() {
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
               <button className="cbc-btn" onClick={() => setScreen("history")} style={navBtnStyle}>
-                {T.history(brews.length)}
+                {T.historyNav(brews.length)}
               </button>
             )}
             <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
