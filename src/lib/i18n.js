@@ -26,6 +26,8 @@ const sv = {
     newFromZero: "Ny bryggning från noll",
     newBrew: "Ny bryggning",
     loadingBrews: "Läser in sparade bryggningar …",
+    inProgressEyebrow: "Pågående bryggning",
+    continueBrew: (methodLabel) => `Fortsätt ${methodLabel}-bryggningen`,
   },
 
   setup: {
@@ -289,6 +291,8 @@ const en = {
     newFromZero: "New brew from scratch",
     newBrew: "New brew",
     loadingBrews: "Loading saved brews …",
+    inProgressEyebrow: "Brew in progress",
+    continueBrew: (methodLabel) => `Continue ${methodLabel} Brew`,
   },
 
   setup: {
