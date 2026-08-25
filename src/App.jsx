@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { getItem, setItem } from "./lib/storage";
+import { loadBrews, saveBrews } from "./lib/brews";
 import { useAuth } from "./lib/useAuth";
 import { signInWithGoogle, signOut } from "./lib/firebase";
 
@@ -537,8 +537,6 @@ function BrewGauge({ recipe, poured }) {
 /*  Appen                                                              */
 /* ------------------------------------------------------------------ */
 
-const STORE_KEY = "chemex:v1";
-
 export default function ChemexBrewCoach() {
   const user = useAuth();
   const [authError, setAuthError] = useState(null);
@@ -558,26 +556,23 @@ export default function ChemexBrewCoach() {
   const [result, setResult] = useState(null);
   const tick = useRef(null);
 
-  /* Ladda sparade bryggningar */
+  /* Ladda sparade bryggningar från Firestore */
   useEffect(() => {
+    if (!user) return;
     (async () => {
       try {
-        const r = await getItem(STORE_KEY);
-        if (r && r.value) {
-          const parsed = JSON.parse(r.value);
-          if (Array.isArray(parsed.brews)) setBrews(parsed.brews);
-        }
+        setBrews(await loadBrews(user.uid));
       } catch (e) {
         /* inget sparat än */
       }
       setLoaded(true);
     })();
-  }, []);
+  }, [user]);
 
   async function persist(next) {
     setBrews(next);
     try {
-      const ok = await setItem(STORE_KEY, JSON.stringify({ brews: next }));
+      const ok = await saveBrews(user.uid, next);
       setSaveFailed(!ok);
     } catch (e) {
       setSaveFailed(true);
