@@ -263,6 +263,11 @@ const sv = {
   theme: { light: "Ljust", dark: "Mörkt" },
   lang: { sv: "Svenska", en: "English" },
   chooseMethod: "Bryggmetod",
+  sources: {
+    title: "Källor",
+    intro: (methodLabel) => `Siffrorna för ${methodLabel} — ratio, malning, temperatur, bloom och tider — är hämtade från de här bryggguiderna.`,
+    close: "Stäng",
+  },
 };
 
 const en = {
@@ -528,6 +533,11 @@ const en = {
   theme: { light: "Light", dark: "Dark" },
   lang: { sv: "Svenska", en: "English" },
   chooseMethod: "Brew method",
+  sources: {
+    title: "Sources",
+    intro: (methodLabel) => `${methodLabel}'s numbers — ratio, grind, temperature, bloom, and timing — are drawn from these brewing guides.`,
+    close: "Close",
+  },
 };
 
 export const translations = { sv, en };

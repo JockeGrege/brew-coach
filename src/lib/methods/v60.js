@@ -44,6 +44,15 @@ export const v60 = {
   bloomSeconds,
   pours,
   lastPourAt,
+  // Guides consulted when setting these numbers (ratio, grind, temperature,
+  // bloom, pour structure, total time) — shown to the user via the header's
+  // info icon.
+  sources: [
+    { label: "The Coffee Calculator — V60 Pour-Over Brewing Guide", url: "https://thecoffeecalculator.com/guides/brewing-with-pour-over-v60" },
+    { label: "Kaldi's Coffee — The V60 Brew Guide", url: "https://kaldiscoffee.com/blogs/recipes/v60-coffee-brewer-guide-and-recipe" },
+    { label: "Honest Coffee Guide — James Hoffmann's Ultimate V60 Recipe", url: "https://honestcoffeeguide.com/brew-recipes/james-hoffmann-v60/" },
+    { label: "Honest Coffee Guide — Pour-Over Grind Size", url: "https://honestcoffeeguide.com/pour-over-grind-size/" },
+  ],
   gauge: {
     viewBox: "0 0 168 172",
     width: 168,

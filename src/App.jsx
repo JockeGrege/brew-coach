@@ -410,6 +410,44 @@ function ConfirmDialog({ message, confirmLabel, cancelLabel, danger, onConfirm, 
   );
 }
 
+function SourcesDialog({ title, intro, sources, closeLabel, onClose }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 10,
+      }}
+      onClick={onClose}
+    >
+      <div style={{ width: "100%", maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <div style={{ fontFamily: F.display, fontSize: 19, marginBottom: 8 }}>{title}</div>
+          <div style={{ fontSize: 13.5, color: C.ink2, lineHeight: 1.5, marginBottom: 16 }}>{intro}</div>
+          <ul style={{ margin: 0, padding: 0, listStyle: "none" }}>
+            {sources.map((s) => (
+              <li key={s.url} style={{ marginBottom: 10, paddingBottom: 10, borderBottom: `1px solid ${C.line}` }}>
+                <a href={s.url} target="_blank" rel="noreferrer" style={{ color: C.ink, fontSize: 13.5, lineHeight: 1.4 }}>
+                  {s.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <div style={{ height: 6 }} />
+          <Button variant="quiet" onClick={onClose}>
+            {closeLabel}
+          </Button>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 function Choice({ label, sub, selected, onClick }) {
   return (
     <button
@@ -529,6 +567,7 @@ export default function ChemexBrewCoach() {
   const activeMethod = METHODS[method];
   const [authError, setAuthError] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
+  const [showSources, setShowSources] = useState(false);
   const [screen, setScreen] = useState("home");
 
   // Wires the phone's back button/gesture into screen navigation instead of
@@ -1007,6 +1046,15 @@ export default function ChemexBrewCoach() {
           onCancel={() => setConfirmAction(null)}
         />
       )}
+      {showSources && (
+        <SourcesDialog
+          title={T.sources.title}
+          intro={T.sources.intro(activeMethod.label)}
+          sources={activeMethod.sources}
+          closeLabel={T.sources.close}
+          onClose={() => setShowSources(false)}
+        />
+      )}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         {/* Sidhuvud */}
@@ -1021,7 +1069,34 @@ export default function ChemexBrewCoach() {
                 {activeMethod.label} {T.brandSuffix}
               </div>
             </button>
-            <div>{methodSelect}</div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              {methodSelect}
+              <button
+                className="cbc-btn"
+                onClick={() => setShowSources(true)}
+                aria-label={T.sources.title}
+                title={T.sources.title}
+                style={{
+                  marginTop: 4,
+                  width: 22,
+                  height: 22,
+                  borderRadius: "50%",
+                  border: `1px solid ${C.line}`,
+                  background: "transparent",
+                  color: C.ink3,
+                  fontFamily: F.display,
+                  fontSize: 13,
+                  fontStyle: "italic",
+                  cursor: "pointer",
+                  padding: 0,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                i
+              </button>
+            </div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {methodBrews.length > 0 && screen !== "history" && (

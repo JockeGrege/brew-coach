@@ -34,6 +34,16 @@ export const chemex = {
   bloomSeconds,
   pours,
   lastPourAt,
+  // Guides consulted when setting these numbers (ratio, grind, temperature,
+  // bloom, pour count, total time) — shown to the user via the header's
+  // info icon.
+  sources: [
+    { label: "Equator Coffees — Chemex Brew Guide", url: "https://www.equatorcoffees.com/blogs/guides/chemex" },
+    { label: "Bean Box — How to Use a Chemex", url: "https://beanbox.com/blog/how-to-use-a-chemex" },
+    { label: "Blue Bottle Coffee — How to Brew with a Chemex", url: "https://bluebottlecoffee.com/us/eng/brew-guides/chemex" },
+    { label: "Hop Culture — The 5 Minute or Less Chemex Brew Guide", url: "https://www.hopculture.com/how-to-chemex-brew-guide/" },
+    { label: "Official Chemex Coffeemaker — filter-folding technique", url: "https://chemexcoffeemaker.com/pages/how-to-brew-with-chemex" },
+  ],
   gauge: {
     viewBox: "0 0 168 172",
     width: 168,
