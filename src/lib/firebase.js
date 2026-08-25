@@ -2,7 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithPopup,
+  signInWithRedirect,
   signOut as firebaseSignOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -21,8 +21,11 @@ export const auth = getAuth(app);
 
 const googleProvider = new GoogleAuthProvider();
 
+// Redirect rather than popup: popup-based OAuth is unreliable once the app
+// is installed to a phone's home screen (iOS Safari in particular breaks it
+// in standalone display mode).
 export function signInWithGoogle() {
-  return signInWithPopup(auth, googleProvider);
+  return signInWithRedirect(auth, googleProvider);
 }
 
 export function signOut() {
