@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { getItem, setItem } from "./lib/storage";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
@@ -557,7 +558,7 @@ export default function ChemexBrewCoach() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await window.storage.get(STORE_KEY);
+        const r = await getItem(STORE_KEY);
         if (r && r.value) {
           const parsed = JSON.parse(r.value);
           if (Array.isArray(parsed.brews)) setBrews(parsed.brews);
@@ -572,7 +573,7 @@ export default function ChemexBrewCoach() {
   async function persist(next) {
     setBrews(next);
     try {
-      const ok = await window.storage.set(STORE_KEY, JSON.stringify({ brews: next }));
+      const ok = await setItem(STORE_KEY, JSON.stringify({ brews: next }));
       setSaveFailed(!ok);
     } catch (e) {
       setSaveFailed(true);
