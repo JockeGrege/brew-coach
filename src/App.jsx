@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { loadBrews, saveBrews } from "./lib/brews";
 import { useAuth } from "./lib/useAuth";
 import { signInWithGoogle, signOut } from "./lib/firebase";
@@ -493,7 +493,7 @@ function BrewGauge({ recipe, poured }) {
           <path d={glass} />
         </clipPath>
       </defs>
-      <path d={glass} fill={C.glass} stroke={C.line} strokeWidth="1.5" />
+      <path d={glass} fill="#FFFFFF" stroke={C.line} strokeWidth="1.5" />
       <g clipPath="url(#cbc-glass)">
         <rect x="0" y={fillY} width="100" height={bottom - fillY + 8} fill={C.brew} style={{ transition: "y 400ms ease" }} />
       </g>
@@ -585,7 +585,16 @@ export default function ChemexBrewCoach() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: this needs to land before the browser
+  // paints, or there's a flash of the wrong theme on <html> on first load.
+  useLayoutEffect(() => {
+    // On <html> rather than only the inner shell div: custom properties only
+    // cascade to descendants, and <body> — never styled by this component,
+    // so it keeps the browser's default white background — sits *above*
+    // the shell div in the tree. Theming html covers body too, closing the
+    // white frame that showed around the app (worst in dark mode, where the
+    // default white body was most visible against everything else).
+    document.documentElement.setAttribute("data-theme", theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", PALETTES[theme].ink);
   }, [theme]);
@@ -604,6 +613,7 @@ export default function ChemexBrewCoach() {
     <style>{`
       :root { ${paletteVars(PALETTES.light)} }
       [data-theme="dark"] { ${paletteVars(PALETTES.dark)} }
+      html, body { margin: 0; background: ${C.paper}; }
       .cbc-btn:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 2px; }
       .cbc-btn:hover:not(:disabled) { filter: brightness(1.06); }
       input, textarea { font-family: ${F.mono}; }
