@@ -9,8 +9,16 @@ export function useAuth() {
   const [authError, setAuthError] = useState(null);
 
   useEffect(() => {
-    consumeRedirectResult().catch((err) => setAuthError(err.message || String(err)));
-    return onAuthChange(setUser);
+    consumeRedirectResult()
+      .then((result) => console.debug("Redirect result:", result))
+      .catch((err) => {
+        console.error("Google redirect sign-in failed:", err);
+        setAuthError(err.message || String(err));
+      });
+    return onAuthChange((u) => {
+      console.debug("Auth state changed:", u);
+      setUser(u);
+    });
   }, []);
 
   return { user, authError };
