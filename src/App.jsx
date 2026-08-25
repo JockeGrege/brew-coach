@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { getItem, setItem } from "./lib/storage";
+import { useAuth } from "./lib/useAuth";
+import { signInWithGoogle, signOut } from "./lib/firebase";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
@@ -538,6 +540,8 @@ function BrewGauge({ recipe, poured }) {
 const STORE_KEY = "chemex:v1";
 
 export default function ChemexBrewCoach() {
+  const user = useAuth();
+  const [authError, setAuthError] = useState(null);
   const [screen, setScreen] = useState("home");
   const [loaded, setLoaded] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -587,6 +591,52 @@ export default function ChemexBrewCoach() {
       return () => clearInterval(tick.current);
     }
   }, [running]);
+
+  const shell = {
+    minHeight: "100vh",
+    background: C.paper,
+    color: C.ink,
+    fontFamily: F.ui,
+    padding: "22px 16px 40px",
+    display: "flex",
+    justifyContent: "center",
+  };
+
+  if (user === undefined) {
+    return (
+      <div style={shell}>
+        <div style={{ fontFamily: F.mono, fontSize: 13, color: C.ink3 }}>Loggar in …</div>
+      </div>
+    );
+  }
+
+  if (user === null) {
+    return (
+      <div style={shell}>
+        <div style={{ width: "100%", maxWidth: 460 }}>
+          <Card style={{ textAlign: "center", padding: "44px 24px" }}>
+            <div style={{ fontFamily: F.display, fontSize: 24, marginBottom: 8 }}>Chemex Brew Coach</div>
+            <div style={{ fontSize: 14, color: C.ink2, marginBottom: 26, lineHeight: 1.5 }}>
+              Logga in för att spara och synka dina bryggningar mellan enheter.
+            </div>
+            {authError && (
+              <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 18, borderRadius: 3, textAlign: "left" }}>
+                Inloggningen misslyckades: {authError}
+              </div>
+            )}
+            <Button
+              onClick={() => {
+                setAuthError(null);
+                signInWithGoogle().catch((err) => setAuthError(err.message || String(err)));
+              }}
+            >
+              Logga in med Google
+            </Button>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   const last = brews[0] || null;
 
@@ -659,16 +709,6 @@ export default function ChemexBrewCoach() {
 
   /* ------------------------------------------------------------------ */
 
-  const shell = {
-    minHeight: "100vh",
-    background: C.paper,
-    color: C.ink,
-    fontFamily: F.ui,
-    padding: "22px 16px 40px",
-    display: "flex",
-    justifyContent: "center",
-  };
-
   return (
     <div style={shell}>
       <style>{`
@@ -689,15 +729,25 @@ export default function ChemexBrewCoach() {
           >
             <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em" }}>Chemex Brew Coach</div>
           </button>
-          {brews.length > 0 && screen !== "history" && (
+          <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+            {brews.length > 0 && screen !== "history" && (
+              <button
+                className="cbc-btn"
+                onClick={() => setScreen("history")}
+                style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink2 }}
+              >
+                Historik ({brews.length})
+              </button>
+            )}
             <button
               className="cbc-btn"
-              onClick={() => setScreen("history")}
-              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink2 }}
+              onClick={() => signOut()}
+              title={user.email || undefined}
+              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink3 }}
             >
-              Historik ({brews.length})
+              Logga ut
             </button>
-          )}
+          </div>
         </div>
 
         {saveFailed && (

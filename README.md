@@ -6,6 +6,7 @@ A guided Chemex brewing coach: dial in a recipe, walk through the brew with a ti
 
 ```bash
 npm install
+cp .env.example .env   # fill in your Firebase project's config
 npm run dev
 ```
 
