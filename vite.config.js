@@ -15,9 +15,9 @@ export default defineConfig({
       registerType: "autoUpdate",
       includeAssets: ["icons/icon-192.png", "icons/icon-512.png"],
       manifest: {
-        name: "Chemex Brew Coach",
+        name: "Brew Coach",
         short_name: "Brew Coach",
-        description: "Guided Chemex brewing with recipe coaching that learns from your feedback.",
+        description: "Guided Chemex and V60 brewing with recipe coaching that learns from your feedback.",
         start_url: base,
         scope: base,
         display: "standalone",
