@@ -120,6 +120,15 @@ const sv = {
     offRoastSuffix: (n) => ` · ${n} d efter rost`,
     next: "Nästa:",
     toHome: "Till startsidan",
+    clearAll: "Radera allt",
+    remove: "Ta bort",
+  },
+
+  confirm: {
+    cancel: "Avbryt",
+    signOut: "Är du säker på att du vill logga ut?",
+    clearAll: (n) => `Radera alla ${n} bryggningar? Det går inte att ångra.`,
+    removeOne: "Ta bort den här bryggningen? Det går inte att ångra.",
   },
 
   roasts: {
@@ -343,6 +352,15 @@ const en = {
     offRoastSuffix: (n) => ` · ${n} d off roast`,
     next: "Next:",
     toHome: "Back to home",
+    clearAll: "Delete all",
+    remove: "Remove",
+  },
+
+  confirm: {
+    cancel: "Cancel",
+    signOut: "Are you sure you want to sign out?",
+    clearAll: (n) => `Delete all ${n} brews? This can't be undone.`,
+    removeOne: "Remove this brew? This can't be undone.",
   },
 
   roasts: {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { loadBrews, saveBrews } from "./lib/brews";
 import { useAuth } from "./lib/useAuth";
 import { signInWithGoogle, signOut } from "./lib/firebase";
@@ -396,11 +396,43 @@ function Button({ children, onClick, variant = "primary", disabled, style }) {
     primary: { background: C.ink, color: C.card, border: `1px solid ${C.ink}` },
     quiet: { background: "transparent", color: C.ink, border: `1px solid ${C.line}` },
     plain: { background: "transparent", color: C.ink2, border: "1px solid transparent", padding: "10px 4px", fontSize: 14 },
+    danger: { background: C.hot, color: C.card, border: `1px solid ${C.hot}` },
   };
   return (
     <button className="cbc-btn" onClick={disabled ? undefined : onClick} disabled={disabled} style={{ ...base, ...skins[variant], ...style }}>
       {children}
     </button>
+  );
+}
+
+function ConfirmDialog({ message, confirmLabel, cancelLabel, danger, onConfirm, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 10,
+      }}
+      onClick={onCancel}
+    >
+      <div style={{ width: "100%", maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <div style={{ fontSize: 15, lineHeight: 1.5, color: C.ink, marginBottom: 20 }}>{message}</div>
+          <Button variant={danger ? "danger" : "primary"} onClick={onConfirm}>
+            {confirmLabel}
+          </Button>
+          <div style={{ height: 8 }} />
+          <Button variant="quiet" onClick={onCancel}>
+            {cancelLabel}
+          </Button>
+        </Card>
+      </div>
+    </div>
   );
 }
 
@@ -425,7 +457,7 @@ function Choice({ label, sub, selected, onClick }) {
     >
       <div style={{ fontWeight: 500 }}>{label}</div>
       {sub && (
-        <div style={{ fontSize: 12.5, marginTop: 3, color: selected ? "rgba(251,250,246,0.72)" : C.ink3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12.5, marginTop: 3, color: selected ? C.card : C.ink3, opacity: selected ? 0.72 : 1, lineHeight: 1.4 }}>
           {sub}
         </div>
       )}
@@ -440,6 +472,29 @@ function Row({ label, value, accent }) {
       <span style={{ fontFamily: F.mono, fontSize: 15, fontVariantNumeric: "tabular-nums", color: accent || C.ink }}>{value}</span>
     </div>
   );
+}
+
+/* Gramskalans märken kan hamna nära varandra (t.ex. bloom nära en liten
+   hällning, eller flera märken på samma värde), vilket gör etiketterna
+   svåra att läsa. Slår ihop dubbletter och sprider isär resten tills alla
+   har minst MIN_LABEL_GAP mellan sig, sedan flyttas hela gruppen tillbaka
+   in om den svämmade över kant. */
+const MIN_LABEL_GAP = 12;
+
+function declutterMarks(marks, water, top, bottom) {
+  const byValue = new Map(marks.map((m) => [m.g, m]));
+  const positioned = [...byValue.values()]
+    .map((m) => ({ ...m, y: bottom - clamp(m.g / water, 0, 1) * (bottom - top) }))
+    .sort((a, b) => a.y - b.y);
+
+  for (let i = 1; i < positioned.length; i++) {
+    positioned[i].y = Math.max(positioned[i].y, positioned[i - 1].y + MIN_LABEL_GAP);
+  }
+  const overflow = positioned.length ? positioned[positioned.length - 1].y - bottom : 0;
+  if (overflow > 0) {
+    for (const m of positioned) m.y -= overflow;
+  }
+  return positioned;
 }
 
 /* Signaturen: Chemex-silhuetten som nivåmätare med gramskala */
@@ -467,17 +522,14 @@ function BrewGauge({ recipe, poured }) {
       </g>
       <path d="M40,74 L60,74 L63,100 L37,100 Z" fill={C.collar} />
       <line x1="37" y1="87" x2="63" y2="87" stroke="#7C5427" strokeWidth="1.2" />
-      {marks.map((m) => {
-        const y = bottom - clamp(m.g / recipe.water, 0, 1) * (bottom - top);
-        return (
-          <g key={m.l}>
-            <line x1="84" y1={y} x2="96" y2={y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
-            <text x="100" y={y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
-              {m.g} g
-            </text>
-          </g>
-        );
-      })}
+      {declutterMarks(marks, recipe.water, top, bottom).map((m) => (
+        <g key={m.l}>
+          <line x1="84" y1={m.y} x2="96" y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
+          <text x="100" y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
+            {m.g} g
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }
@@ -492,6 +544,7 @@ export default function ChemexBrewCoach() {
   const [lang, setLang] = useLang();
   const T = translations[lang];
   const [authError, setAuthError] = useState(null);
+  const [confirmAction, setConfirmAction] = useState(null);
   const [screen, setScreen] = useState("home");
   const [loaded, setLoaded] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -531,6 +584,14 @@ export default function ChemexBrewCoach() {
     }
   }
 
+  async function removeBrew(id) {
+    await persist(brews.filter((b) => b.id !== id));
+  }
+
+  async function clearAllBrews() {
+    await persist([]);
+  }
+
   /* Klocka */
   useEffect(() => {
     if (running) {
@@ -544,7 +605,16 @@ export default function ChemexBrewCoach() {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  useEffect(() => {
+  // useLayoutEffect, not useEffect: this needs to land before the browser
+  // paints, or there's a flash of the wrong theme on <html> on first load.
+  useLayoutEffect(() => {
+    // On <html> rather than only the inner shell div: custom properties only
+    // cascade to descendants, and <body> — never styled by this component,
+    // so it keeps the browser's default white background — sits *above*
+    // the shell div in the tree. Theming html covers body too, closing the
+    // white frame that showed around the app (worst in dark mode, where the
+    // default white body was most visible against everything else).
+    document.documentElement.setAttribute("data-theme", theme);
     const meta = document.querySelector('meta[name="theme-color"]');
     if (meta) meta.setAttribute("content", PALETTES[theme].ink);
   }, [theme]);
@@ -563,6 +633,7 @@ export default function ChemexBrewCoach() {
     <style>{`
       :root { ${paletteVars(PALETTES.light)} }
       [data-theme="dark"] { ${paletteVars(PALETTES.dark)} }
+      html, body { margin: 0; background: ${C.paper}; }
       .cbc-btn:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 2px; }
       .cbc-btn:hover:not(:disabled) { filter: brightness(1.06); }
       input, textarea { font-family: ${F.mono}; }
@@ -704,6 +775,19 @@ export default function ChemexBrewCoach() {
   return (
     <div style={shell} data-theme={theme}>
       {styleTag}
+      {confirmAction && (
+        <ConfirmDialog
+          message={confirmAction.message}
+          confirmLabel={confirmAction.confirmLabel}
+          cancelLabel={T.confirm.cancel}
+          danger={confirmAction.danger}
+          onConfirm={() => {
+            confirmAction.onConfirm();
+            setConfirmAction(null);
+          }}
+          onCancel={() => setConfirmAction(null)}
+        />
+      )}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         {/* Sidhuvud */}
@@ -713,7 +797,7 @@ export default function ChemexBrewCoach() {
             onClick={() => setScreen("home")}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
-            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em" }}>{T.appTitle}</div>
+            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 }}>{T.appTitle}</div>
           </button>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
@@ -727,7 +811,18 @@ export default function ChemexBrewCoach() {
             <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
               {T.theme[theme === "light" ? "dark" : "light"]}
             </button>
-            <button className="cbc-btn" onClick={() => signOut()} title={user.email || undefined} style={{ ...navBtnStyle, color: C.ink3 }}>
+            <button
+              className="cbc-btn"
+              onClick={() =>
+                setConfirmAction({
+                  message: T.confirm.signOut,
+                  confirmLabel: T.signOut,
+                  onConfirm: () => signOut(),
+                })
+              }
+              title={user.email || undefined}
+              style={{ ...navBtnStyle, color: C.ink3 }}
+            >
               {T.signOut}
             </button>
           </div>
@@ -745,7 +840,10 @@ export default function ChemexBrewCoach() {
             <Card style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                 <div style={{ flex: 1 }}>
-                  <Eyebrow>{last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}</Eyebrow>
+                  <Eyebrow>
+                    {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
+                    {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                  </Eyebrow>
                   {last ? (
                     <>
                       <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
@@ -861,6 +959,7 @@ export default function ChemexBrewCoach() {
                   min={12}
                   max={75}
                   step={1}
+                  bigStep={5}
                   onChange={(v) => setCfg((c) => ({ ...c, dose: v }))}
                   decreaseLabel={T.decrease}
                   increaseLabel={T.increase}
@@ -1167,8 +1266,26 @@ export default function ChemexBrewCoach() {
         {screen === "history" && (
           <div>
             <Card style={{ marginBottom: 12 }}>
-              <Eyebrow>{T.history.eyebrow}</Eyebrow>
-              <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <Eyebrow>{T.history.eyebrow}</Eyebrow>
+                  <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
+                </div>
+                <button
+                  className="cbc-btn"
+                  onClick={() =>
+                    setConfirmAction({
+                      message: T.confirm.clearAll(brews.length),
+                      confirmLabel: T.history.clearAll,
+                      danger: true,
+                      onConfirm: () => clearAllBrews(),
+                    })
+                  }
+                  style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.hot }}
+                >
+                  {T.history.clearAll}
+                </button>
+              </div>
             </Card>
 
             {brews.map((b) => (
@@ -1189,8 +1306,24 @@ export default function ChemexBrewCoach() {
                   {T.history.became} {T.taste[b.feedback.taste]}, {T.flow[b.feedback.flow]}.
                   {b.feedback.comment ? ` ”${b.feedback.comment}”` : ""}
                 </div>
-                <div style={{ fontSize: 13, color: C.ink2, marginTop: 6, lineHeight: 1.5 }}>
-                  {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
+                  <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
+                    {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                  </div>
+                  <button
+                    className="cbc-btn"
+                    onClick={() =>
+                      setConfirmAction({
+                        message: T.confirm.removeOne,
+                        confirmLabel: T.history.remove,
+                        danger: true,
+                        onConfirm: () => removeBrew(b.id),
+                      })
+                    }
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0, marginLeft: 10 }}
+                  >
+                    {T.history.remove}
+                  </button>
                 </div>
               </Card>
             ))}
@@ -1206,21 +1339,26 @@ export default function ChemexBrewCoach() {
 }
 
 /* Sifferväljare med tumvänliga knappar */
-function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "", decreaseLabel = "Decrease", increaseLabel = "Increase" }) {
+function Stepper({ value, onChange, min, max, step, bigStep, prefix = "", suffix = "", decreaseLabel = "Decrease", increaseLabel = "Increase" }) {
   const btn = {
-    width: 46,
+    width: 42,
     height: 46,
     borderRadius: 3,
     border: `1px solid ${C.line}`,
     background: "transparent",
     color: C.ink,
-    fontSize: 20,
+    fontSize: 17,
     cursor: "pointer",
     fontFamily: F.mono,
     lineHeight: 1,
   };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {bigStep && (
+        <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - bigStep, min, max))} aria-label={`${decreaseLabel} ${bigStep}`}>
+          −{bigStep}
+        </button>
+      )}
       <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - step, min, max))} aria-label={decreaseLabel}>
         –
       </button>
@@ -1244,6 +1382,11 @@ function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "", de
       <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + step, min, max))} aria-label={increaseLabel}>
         +
       </button>
+      {bigStep && (
+        <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + bigStep, min, max))} aria-label={`${increaseLabel} ${bigStep}`}>
+          +{bigStep}
+        </button>
+      )}
     </div>
   );
 }
