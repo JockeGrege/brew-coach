@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 
 const sv = {
   locale: "sv-SE",
-  appTitle: "Chemex Brew Coach",
+  brandSuffix: "Brew Coach",
   signOut: "Logga ut",
   historyNav: (n) => `Historik (${n})`,
   saveFailed: "Bryggningen kunde inte sparas. Skriv ner inställningarna innan du stänger sidan.",
@@ -38,7 +38,6 @@ const sv = {
     gCoffeeSuffix: "g kaffe",
     cupSingular: "kopp",
     cupPlural: "koppar",
-    overDose: "Över 65 g blir kaffebädden djupare än 5 cm och extraktionen ojämn. Brygg hellre två omgångar.",
     yields: (g) => `Ger ${g} g kaffe. En kopp räknas som ca 170 ml färdigt kaffe.`,
     ratio: "Ratio",
     ratioHint: "Lägre siffra ger starkare kaffe. 1:16 är utgångsläget.",
@@ -134,9 +133,9 @@ const sv = {
   },
 
   roasts: {
-    light: { label: "Ljusrost", grind: "Medium-grov", hint: "Blommigt och syrligt. Tål högst temperatur och längst tid." },
-    medium: { label: "Mellanrost", grind: "Medium-grov", hint: "Balanserat. Mittfåran i både temperatur och tid." },
-    dark: { label: "Mörkrost", grind: "Lite grövre", hint: "Choklad och rostade toner. Blir lätt besk — kortare tid, lägre värme." },
+    light: { label: "Ljusrost", hint: "Blommigt och syrligt. Tål högst temperatur och längst tid." },
+    medium: { label: "Mellanrost", hint: "Balanserat. Mittfåran i både temperatur och tid." },
+    dark: { label: "Mörkrost", hint: "Choklad och rostade toner. Blir lätt besk — kortare tid, lägre värme." },
   },
 
   taste: {
@@ -156,10 +155,6 @@ const sv = {
   grindNote: (base, steps, dir) => `${base}, ${steps} steg ${dir}`,
 
   steps: {
-    rinse: {
-      title: "Skölj filtret",
-      detail: "Vik filtret så att tre lager ligger mot pipen. Skölj igenom med hett vatten och häll ur sköljvattnet.",
-    },
     grind: {
       title: "Mal och nolla vågen",
       detail: (dose, grindNote, temp) => `Mal ${dose} g på ${grindNote}. Jämna till bädden och nolla vågen. Vattnet ska hålla ${temp} °C.`,
@@ -168,12 +163,45 @@ const sv = {
       title: "Bloom",
       detail: (bloom, sec) => `Häll till ${bloom} g så att allt kaffe blir blött. Rör om lätt och låt stå ${sec} sekunder.`,
     },
-    p1: { title: "Hällning 1", detail: (g) => `Häll i spiral upp till ${g} g.` },
-    p2: { title: "Hällning 2", detail: (g) => `Fyll på till ${g} g när nivån sjunkit.` },
-    p3: { title: "Hällning 3", detail: (g) => `Sista hällningen, upp till ${g} g.` },
-    drawdown: {
-      title: "Låt rinna klart",
-      detail: (lo, hi) => `Måltid ${lo}–${hi}. Stoppa klockan när bädden är torrlagd och lyft filtret.`,
+    pour: (n, total) => ({
+      title: `Hällning ${n}`,
+      detail: (g) =>
+        n === 1
+          ? `Häll i spiral upp till ${g} g.`
+          : n === total
+          ? `Sista hällningen, upp till ${g} g.`
+          : `Fyll på till ${g} g när nivån sjunkit.`,
+    }),
+  },
+
+  methods: {
+    chemex: {
+      roastGrind: { light: "Medium-grov", medium: "Medium-grov", dark: "Lite grövre" },
+      overDose: "Över 65 g blir kaffebädden djupare än 5 cm och extraktionen ojämn. Brygg hellre två omgångar.",
+      steps: {
+        rinse: {
+          title: "Skölj filtret",
+          detail: "Vik filtret så att tre lager ligger mot pipen. Skölj igenom med hett vatten och häll ur sköljvattnet.",
+        },
+        drawdown: {
+          title: "Låt rinna klart",
+          detail: (lo, hi) => `Måltid ${lo}–${hi}. Stoppa klockan när bädden är torrlagd och lyft filtret.`,
+        },
+      },
+    },
+    v60: {
+      roastGrind: { light: "Medium-fin", medium: "Medium-fin", dark: "Lite grövre" },
+      overDose: "Över 35 g blir bädden för djup för tratten och extraktionen ojämn. Brygg hellre två omgångar.",
+      steps: {
+        rinse: {
+          title: "Skölj filtret",
+          detail: "Vik ut filtret i tratten och skölj igenom med hett vatten för att värma bryggaren och ta bort pappenssmak. Häll ur sköljvattnet.",
+        },
+        drawdown: {
+          title: "Låt rinna klart",
+          detail: (lo, hi) => `Måltid ${lo}–${hi}. Stoppa klockan när bädden är torrlagd och lyft bryggaren.`,
+        },
+      },
     },
   },
 
@@ -232,11 +260,12 @@ const sv = {
 
   theme: { light: "Ljust", dark: "Mörkt" },
   lang: { sv: "Svenska", en: "English" },
+  chooseMethod: "Bryggmetod",
 };
 
 const en = {
   locale: "en-US",
-  appTitle: "Chemex Brew Coach",
+  brandSuffix: "Brew Coach",
   signOut: "Sign out",
   historyNav: (n) => `History (${n})`,
   saveFailed: "The brew couldn't be saved. Write down the settings before closing the page.",
@@ -272,7 +301,6 @@ const en = {
     gCoffeeSuffix: "g coffee",
     cupSingular: "cup",
     cupPlural: "cups",
-    overDose: "Above 65 g the coffee bed gets deeper than 5 cm and extraction turns uneven. Better to brew two batches instead.",
     yields: (g) => `Yields ${g} g of coffee. A cup counts as roughly 170 ml of brewed coffee.`,
     ratio: "Ratio",
     ratioHint: "A lower number gives stronger coffee. 1:16 is the default.",
@@ -368,9 +396,9 @@ const en = {
   },
 
   roasts: {
-    light: { label: "Light roast", grind: "Medium-coarse", hint: "Floral and bright. Tolerates the highest temperature and longest time." },
-    medium: { label: "Medium roast", grind: "Medium-coarse", hint: "Balanced. The middle ground on both temperature and time." },
-    dark: { label: "Dark roast", grind: "Slightly coarser", hint: "Chocolate and roasted notes. Turns bitter easily — shorter time, lower heat." },
+    light: { label: "Light roast", hint: "Floral and bright. Tolerates the highest temperature and longest time." },
+    medium: { label: "Medium roast", hint: "Balanced. The middle ground on both temperature and time." },
+    dark: { label: "Dark roast", hint: "Chocolate and roasted notes. Turns bitter easily — shorter time, lower heat." },
   },
 
   taste: {
@@ -390,10 +418,6 @@ const en = {
   grindNote: (base, steps, dir) => `${base}, ${steps} step${steps > 1 ? "s" : ""} ${dir}`,
 
   steps: {
-    rinse: {
-      title: "Rinse the filter",
-      detail: "Fold the filter so three layers sit against the spout. Rinse through with hot water and pour out the rinse water.",
-    },
     grind: {
       title: "Grind and zero the scale",
       detail: (dose, grindNote, temp) => `Grind ${dose} g at ${grindNote}. Level the bed and zero the scale. The water should be ${temp} °C.`,
@@ -402,12 +426,45 @@ const en = {
       title: "Bloom",
       detail: (bloom, sec) => `Pour to ${bloom} g so all the coffee gets wet. Stir gently and let it sit for ${sec} seconds.`,
     },
-    p1: { title: "Pour 1", detail: (g) => `Pour in a spiral up to ${g} g.` },
-    p2: { title: "Pour 2", detail: (g) => `Top up to ${g} g once the level has dropped.` },
-    p3: { title: "Pour 3", detail: (g) => `Final pour, up to ${g} g.` },
-    drawdown: {
-      title: "Let it drain",
-      detail: (lo, hi) => `Target time ${lo}–${hi}. Stop the clock once the bed is dry and lift the filter.`,
+    pour: (n, total) => ({
+      title: `Pour ${n}`,
+      detail: (g) =>
+        n === 1
+          ? `Pour in a spiral up to ${g} g.`
+          : n === total
+          ? `Final pour, up to ${g} g.`
+          : `Top up to ${g} g once the level has dropped.`,
+    }),
+  },
+
+  methods: {
+    chemex: {
+      roastGrind: { light: "Medium-coarse", medium: "Medium-coarse", dark: "Slightly coarser" },
+      overDose: "Above 65 g the coffee bed gets deeper than 5 cm and extraction turns uneven. Better to brew two batches instead.",
+      steps: {
+        rinse: {
+          title: "Rinse the filter",
+          detail: "Fold the filter so three layers sit against the spout. Rinse through with hot water and pour out the rinse water.",
+        },
+        drawdown: {
+          title: "Let it drain",
+          detail: (lo, hi) => `Target time ${lo}–${hi}. Stop the clock once the bed is dry and lift the filter.`,
+        },
+      },
+    },
+    v60: {
+      roastGrind: { light: "Medium-fine", medium: "Medium-fine", dark: "Slightly coarser" },
+      overDose: "Above 35 g the bed gets too deep for the cone and extraction turns uneven. Better to brew two batches instead.",
+      steps: {
+        rinse: {
+          title: "Rinse the filter",
+          detail: "Unfold the filter into the cone and rinse through with hot water to warm the dripper and remove any paper taste. Pour out the rinse water.",
+        },
+        drawdown: {
+          title: "Let it drain",
+          detail: (lo, hi) => `Target time ${lo}–${hi}. Stop the clock once the bed is dry and lift the dripper.`,
+        },
+      },
     },
   },
 
@@ -466,6 +523,7 @@ const en = {
 
   theme: { light: "Light", dark: "Dark" },
   lang: { sv: "Svenska", en: "English" },
+  chooseMethod: "Brew method",
 };
 
 export const translations = { sv, en };

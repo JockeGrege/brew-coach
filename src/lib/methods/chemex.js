@@ -1,0 +1,49 @@
+import { clamp, round5 } from "./shared";
+
+/* Större bädd binder mer CO₂ och behöver längre bloom: 30 s för en liten dos,
+   upp mot 60 s för en full kanna. */
+function bloomSeconds(dose) {
+  return clamp(round5((30 + (dose - 20) * 0.9)), 30, 60);
+}
+
+/* De tre hällningarna delar det som blir kvar efter bloomen i tre lika
+   stora steg. */
+function pours(bloom, water) {
+  const restWater = water - bloom;
+  return [round5(bloom + restWater / 3), round5(bloom + (restWater * 2) / 3), water];
+}
+
+/* Hällningarna ska vara klara efter ca 56 % av måltiden, så att resten
+   räcker till avrinningen. Ger 0:40 / 1:35 / 2:30 för 30 g och
+   0:55 / 1:50 / 2:45 för 45 g — nära de scheman recepten själva anger. */
+function lastPourAt(target, bloomSec) {
+  return Math.max(bloomSec + 70, round5(target * 0.56));
+}
+
+export const chemex = {
+  key: "chemex",
+  label: "Chemex",
+  doseRange: { min: 12, max: 75, default: 30, warnAbove: 65 },
+  ratioRange: { min: 13, max: 19, default: 16 },
+  bloomClamp: [25, 80],
+  ROASTS: {
+    light: { key: "light", tempMin: 96, tempMax: 97, temp: 97, t30: [240, 285], t45: [270, 315] },
+    medium: { key: "medium", tempMin: 94, tempMax: 95, temp: 95, t30: [225, 270], t45: [255, 300] },
+    dark: { key: "dark", tempMin: 92, tempMax: 93, temp: 93, t30: [210, 255], t45: [240, 285] },
+  },
+  bloomSeconds,
+  pours,
+  lastPourAt,
+  gauge: {
+    viewBox: "0 0 168 172",
+    width: 168,
+    height: 172,
+    top: 92,
+    bottom: 152,
+    glassPath: "M25,12 L47,88 L23,146 C23,152 27,156 33,156 L67,156 C73,156 77,152 77,146 L53,88 L75,12 Z",
+    decor: [
+      { path: "M40,74 L60,74 L63,100 L37,100 Z", fillToken: "collar" },
+      { line: { x1: 37, y1: 87, x2: 63, y2: 87 }, stroke: "#7C5427" },
+    ],
+  },
+};

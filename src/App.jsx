@@ -4,6 +4,9 @@ import { useAuth } from "./lib/useAuth";
 import { signInWithGoogle, signOut } from "./lib/firebase";
 import { PALETTES, useTheme } from "./lib/theme";
 import { translations, useLang } from "./lib/i18n";
+import { METHODS, METHOD_ORDER } from "./lib/methods";
+import { useMethod } from "./lib/method";
+import { pourTimes, timeWindow } from "./lib/methods/shared";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
@@ -42,43 +45,12 @@ const F = {
 /*  Bryggdata och logik                                                */
 /* ------------------------------------------------------------------ */
 
-// Numbers only — the label/grind/hint text lives in i18n.js per language.
-const ROASTS = {
-  light: { key: "light", tempMin: 96, tempMax: 97, temp: 97, t30: [240, 285], t45: [270, 315] },
-  medium: { key: "medium", tempMin: 94, tempMax: 95, temp: 95, t30: [225, 270], t45: [255, 300] },
-  dark: { key: "dark", tempMin: 92, tempMax: 93, temp: 93, t30: [210, 255], t45: [240, 285] },
-};
-
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
 const round5 = (v) => Math.round(v / 5) * 5;
 const fmt = (s) => `${Math.floor(s / 60)}:${String(Math.abs(Math.round(s % 60))).padStart(2, "0")}`;
 
-/* Bryggtiden växer logaritmiskt med dosen, inte linjärt. En dubbling av dosen
-   lägger på ungefär 30–60 s, inte det dubbla: bädden blir djupare men också
-   bredare, så flödet per gram kaffe är i stort sett detsamma.
-   Kurvan t(d) = t30 + k · ln(d/30) går exakt genom ankarvärdena för 30 g och
-   45 g och extrapolerar därifrån. Med k ≈ 74 s ger den 20 g → 3:30,
-   30 g → 4:00, 45 g → 4:30, 60 g → 4:51, vilket ligger inom några tiotals
-   sekunder från publicerade Chemex-recept i hela intervallet. */
-const LN15 = Math.log(45 / 30);
-
-function timeWindow(roastKey, dose) {
-  const r = ROASTS[roastKey];
-  const f = Math.log(clamp(dose, 10, 80) / 30) / LN15;
-  return [
-    Math.round(r.t30[0] + (r.t45[0] - r.t30[0]) * f),
-    Math.round(r.t30[1] + (r.t45[1] - r.t30[1]) * f),
-  ];
-}
-
-/* Större bädd binder mer CO₂ och behöver längre bloom: 30 s för en liten dos,
-   upp mot 60 s för en full kanna. */
-function bloomSeconds(dose) {
-  return clamp(Math.round((30 + (dose - 20) * 0.9) / 5) * 5, 30, 60);
-}
-
-function grindNote(roastKey, offset, T) {
-  const base = T.roasts[roastKey].grind;
+function grindNote(methodKey, roastKey, offset, T) {
+  const base = T.methods[methodKey].roastGrind[roastKey];
   if (offset === 0) return base;
   const steps = Math.abs(offset);
   const dir = offset > 0 ? T.next.coarser : T.next.finer;
@@ -182,24 +154,21 @@ function ageProfile(roastKey, cfg, T) {
   };
 }
 
-function buildRecipe(cfg, T) {
-  const roast = ROASTS[cfg.roast];
+function buildRecipe(method, cfg, T) {
   const dose = cfg.dose;
   const water = Math.round(dose * cfg.ratio);
   const bloom = round5(dose * 2);
-  const restWater = water - bloom;
-  const [lo, hi] = timeWindow(cfg.roast, dose);
+  const [lo, hi] = timeWindow(method, cfg.roast, dose);
   const target = Math.round((lo + hi) / 2);
   const rest = ageProfile(cfg.roast, cfg, T);
 
-  /* Hällningarna ska vara klara efter ca 56 % av måltiden, så att resten
-     räcker till avrinningen. Ger 0:40 / 1:35 / 2:30 för 30 g och
-     0:55 / 1:50 / 2:45 för 45 g — nära de scheman recepten själva anger. */
-  const bloomSec = clamp(bloomSeconds(dose) + (rest ? rest.bloomDelta : 0), 25, 80);
-  const lastPour = Math.max(bloomSec + 70, round5(target * 0.56));
-  const gap = round5((lastPour - bloomSec) / 2);
+  const [bloomMin, bloomMax] = method.bloomClamp;
+  const bloomSec = clamp(method.bloomSeconds(dose) + (rest ? rest.bloomDelta : 0), bloomMin, bloomMax);
+  const pours = method.pours(bloom, water);
+  const lastPour = method.lastPourAt(target, bloomSec);
 
   return {
+    method: method.key,
     roast: cfg.roast,
     roastLabel: T.roasts[cfg.roast].label,
     dose,
@@ -207,23 +176,24 @@ function buildRecipe(cfg, T) {
     ratio: cfg.ratio,
     temperature: cfg.temperature,
     grindOffset: cfg.grindOffset,
-    grindNote: grindNote(cfg.roast, cfg.grindOffset, T),
+    grindNote: grindNote(method.key, cfg.roast, cfg.grindOffset, T),
     roastDate: cfg.roastDate || null,
     bestBefore: cfg.bestBefore || null,
     rest,
     bloom,
     bloomSec,
-    pours: [round5(bloom + restWater / 3), round5(bloom + (restWater * 2) / 3), water],
-    pourTimes: [bloomSec, bloomSec + gap, bloomSec + 2 * gap],
+    pours,
+    pourTimes: pourTimes(bloomSec, lastPour, pours.length),
     targetLo: lo,
     targetHi: hi,
     target,
   };
 }
 
-function buildSteps(r, T) {
-  return [
-    { id: "rinse", title: T.steps.rinse.title, detail: T.steps.rinse.detail },
+function buildSteps(method, r, T) {
+  const mt = T.methods[method.key];
+  const steps = [
+    { id: "rinse", title: mt.steps.rinse.title, detail: mt.steps.rinse.detail },
     {
       id: "grind",
       title: T.steps.grind.title,
@@ -236,21 +206,24 @@ function buildSteps(r, T) {
       target: r.bloom,
       at: 0,
     },
-    { id: "p1", title: T.steps.p1.title, detail: T.steps.p1.detail(r.pours[0]), target: r.pours[0], at: r.pourTimes[0] },
-    { id: "p2", title: T.steps.p2.title, detail: T.steps.p2.detail(r.pours[1]), target: r.pours[1], at: r.pourTimes[1] },
-    { id: "p3", title: T.steps.p3.title, detail: T.steps.p3.detail(r.pours[2]), target: r.pours[2], at: r.pourTimes[2] },
-    {
-      id: "drawdown",
-      title: T.steps.drawdown.title,
-      detail: T.steps.drawdown.detail(fmt(r.targetLo), fmt(r.targetHi)),
-      target: r.water,
-    },
   ];
+  r.pours.forEach((g, i) => {
+    const p = T.steps.pour(i + 1, r.pours.length);
+    steps.push({ id: `p${i + 1}`, title: p.title, detail: p.detail(g), target: g, at: r.pourTimes[i] });
+  });
+  steps.push({
+    id: "drawdown",
+    title: mt.steps.drawdown.title,
+    detail: mt.steps.drawdown.detail(fmt(r.targetLo), fmt(r.targetHi)),
+    target: r.water,
+  });
+  return steps;
 }
 
 /* Regelmotorn: flödet styr malningen, smaken får temperatur och ratio. */
 function suggest(recipe, fb, T) {
-  const roast = ROASTS[recipe.roast];
+  const method = METHODS[recipe.method];
+  const roast = method.ROASTS[recipe.roast];
   const roastLabel = T.roasts[recipe.roast].label.toLowerCase();
   let grind = 0;
   let temperature = recipe.temperature;
@@ -295,12 +268,12 @@ function suggest(recipe, fb, T) {
   }
 
   if (fb.taste === "weak") {
-    ratio = clamp(ratio - 1, 13, 19);
+    ratio = clamp(ratio - 1, method.ratioRange.min, method.ratioRange.max);
     why.push(T.suggest.weak(ratio));
   }
 
   if (fb.taste === "strong") {
-    ratio = clamp(ratio + 1, 13, 19);
+    ratio = clamp(ratio + 1, method.ratioRange.min, method.ratioRange.max);
     why.push(T.suggest.strong(ratio));
   }
 
@@ -497,32 +470,33 @@ function declutterMarks(marks, water, top, bottom) {
   return positioned;
 }
 
-/* Signaturen: Chemex-silhuetten som nivåmätare med gramskala */
-function BrewGauge({ recipe, poured }) {
+/* Signaturen: bryggarens silhuett som nivåmätare med gramskala. Formen och
+   dekoren (Chemex-krage, V60-ribbor, ...) kommer från method.gauge, så nya
+   metoder ritar sig själva utan att röra den här komponenten. */
+function BrewGauge({ methodKey, recipe, poured }) {
+  const g = METHODS[methodKey].gauge;
   const frac = clamp(poured / recipe.water, 0, 1);
-  const top = 92, bottom = 152;
-  const fillY = bottom - frac * (bottom - top);
-  const marks = [
-    { g: recipe.bloom, l: "bloom" },
-    { g: recipe.pours[0], l: "1" },
-    { g: recipe.pours[1], l: "2" },
-    { g: recipe.pours[2], l: "3" },
-  ];
-  const glass = "M25,12 L47,88 L23,146 C23,152 27,156 33,156 L67,156 C73,156 77,152 77,146 L53,88 L75,12 Z";
+  const fillY = g.bottom - frac * (g.bottom - g.top);
+  const marks = [{ g: recipe.bloom, l: "bloom" }, ...recipe.pours.map((v, i) => ({ g: v, l: String(i + 1) }))];
   return (
-    <svg viewBox="0 0 168 172" style={{ width: 168, height: 172, display: "block" }} aria-hidden="true">
+    <svg viewBox={g.viewBox} style={{ width: g.width, height: g.height, display: "block" }} aria-hidden="true">
       <defs>
         <clipPath id="cbc-glass">
-          <path d={glass} />
+          <path d={g.glassPath} />
         </clipPath>
       </defs>
-      <path d={glass} fill="#FFFFFF" stroke={C.line} strokeWidth="1.5" />
+      <path d={g.glassPath} fill="#FFFFFF" stroke={C.line} strokeWidth="1.5" />
       <g clipPath="url(#cbc-glass)">
-        <rect x="0" y={fillY} width="100" height={bottom - fillY + 8} fill={C.brew} style={{ transition: "y 400ms ease" }} />
+        <rect x="0" y={fillY} width="100" height={g.bottom - fillY + 8} fill={C.brew} style={{ transition: "y 400ms ease" }} />
       </g>
-      <path d="M40,74 L60,74 L63,100 L37,100 Z" fill={C.collar} />
-      <line x1="37" y1="87" x2="63" y2="87" stroke="#7C5427" strokeWidth="1.2" />
-      {declutterMarks(marks, recipe.water, top, bottom).map((m) => (
+      {g.decor.map((d, i) =>
+        d.path ? (
+          <path key={i} d={d.path} fill={d.fillToken ? C[d.fillToken] : d.fill} />
+        ) : (
+          <line key={i} x1={d.line.x1} y1={d.line.y1} x2={d.line.x2} y2={d.line.y2} stroke={d.stroke} strokeWidth={d.strokeWidth || 1.2} />
+        )
+      )}
+      {declutterMarks(marks, recipe.water, g.top, g.bottom).map((m) => (
         <g key={m.l}>
           <line x1="84" y1={m.y} x2="96" y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
           <text x="100" y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
@@ -543,6 +517,8 @@ export default function ChemexBrewCoach() {
   const [theme, setTheme] = useTheme();
   const [lang, setLang] = useLang();
   const T = translations[lang];
+  const [method, setMethod] = useMethod();
+  const activeMethod = METHODS[method];
   const [authError, setAuthError] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [screen, setScreen] = useState("home");
@@ -557,6 +533,22 @@ export default function ChemexBrewCoach() {
     window.history.pushState({ screen: next }, "");
     setScreen(next);
     window.scrollTo(0, 0);
+  }
+
+  // Switching method resets the in-progress setup fields to that method's
+  // own defaults — a Chemex dose/ratio can sit outside a V60's sane range,
+  // so there's nothing sensible to carry over. Roast, roast date and
+  // best-before describe the coffee, not the method, so those stay put.
+  function handleMethodChange(nextKey) {
+    const m = METHODS[nextKey];
+    setMethod(nextKey);
+    setCfg((c) => ({
+      ...c,
+      dose: m.doseRange.default,
+      ratio: m.ratioRange.default,
+      temperature: m.ROASTS[c.roast].temp,
+      grindOffset: 0,
+    }));
   }
 
   function goHome() {
@@ -583,7 +575,17 @@ export default function ChemexBrewCoach() {
   const [saveFailed, setSaveFailed] = useState(false);
   const [brews, setBrews] = useState([]);
 
-  const [cfg, setCfg] = useState({ roast: "light", inputMode: "dose", dose: 30, cups: 2, ratio: 16, temperature: 97, grindOffset: 0, roastDate: null, bestBefore: null });
+  const [cfg, setCfg] = useState(() => ({
+    roast: "light",
+    inputMode: "dose",
+    dose: activeMethod.doseRange.default,
+    cups: 2,
+    ratio: activeMethod.ratioRange.default,
+    temperature: activeMethod.ROASTS.light.temp,
+    grindOffset: 0,
+    roastDate: null,
+    bestBefore: null,
+  }));
   const [recipe, setRecipe] = useState(null);
   const [steps, setSteps] = useState([]);
   const [stepIndex, setStepIndex] = useState(0);
@@ -666,10 +668,11 @@ export default function ChemexBrewCoach() {
     }
   }, [running]);
 
-  /* Håll <html lang> och adressfältets temafärg i synk med valen ovan */
+  /* Håll <html lang>, bläddarfliken och adressfältets temafärg i synk med valen ovan */
   useEffect(() => {
     document.documentElement.lang = lang;
-  }, [lang]);
+    document.title = `${activeMethod.label} ${T.brandSuffix}`;
+  }, [lang, method]);
 
   // useLayoutEffect, not useEffect: this needs to land before the browser
   // paints, or there's a flash of the wrong theme on <html> on first load.
@@ -719,6 +722,33 @@ export default function ChemexBrewCoach() {
     color: C.ink2,
   };
 
+  const methodSelect = (
+    <select
+      className="cbc-btn"
+      aria-label={T.chooseMethod}
+      value={method}
+      onChange={(e) => handleMethodChange(e.target.value)}
+      style={{
+        marginTop: 4,
+        fontFamily: F.mono,
+        fontSize: 12,
+        letterSpacing: "0.04em",
+        color: C.ink2,
+        background: "transparent",
+        border: `1px solid ${C.line}`,
+        borderRadius: 3,
+        padding: "3px 6px",
+        cursor: "pointer",
+      }}
+    >
+      {METHOD_ORDER.map((k) => (
+        <option key={k} value={k}>
+          {METHODS[k].label}
+        </option>
+      ))}
+    </select>
+  );
+
   const langThemeToggles = (
     <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginBottom: 12 }}>
       <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
@@ -746,7 +776,7 @@ export default function ChemexBrewCoach() {
         <div style={{ width: "100%", maxWidth: 460 }}>
           {langThemeToggles}
           <Card style={{ textAlign: "center", padding: "44px 24px" }}>
-            <div style={{ fontFamily: F.display, fontSize: 24, marginBottom: 8 }}>{T.appTitle}</div>
+            <div style={{ fontFamily: F.display, fontSize: 24, marginBottom: 8 }}>{activeMethod.label} {T.brandSuffix}</div>
             <div style={{ fontSize: 14, color: C.ink2, marginBottom: 26, lineHeight: 1.5 }}>{T.auth.prompt}</div>
             {authError && (
               <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 18, borderRadius: 3, textAlign: "left" }}>
@@ -771,16 +801,20 @@ export default function ChemexBrewCoach() {
 
   /* --- flödeshjälpare --- */
 
-  function openSetup(prefill) {
+  // methodKey lets a "continue from"/"use suggestion" shortcut reopen setup
+  // under whichever method that source brew actually used, rather than
+  // whatever the dropdown currently happens to be on.
+  function openSetup(prefill, methodKey) {
+    if (methodKey && methodKey !== method) setMethod(methodKey);
     setCfg((c) => ({ ...c, ...prefill }));
     goTo("setup");
   }
 
   function toRecipe() {
     const dose = cfg.inputMode === "dose" ? cfg.dose : doseFromCups(cfg.cups, cfg.ratio);
-    const r = buildRecipe({ ...cfg, dose }, T);
+    const r = buildRecipe(activeMethod, { ...cfg, dose }, T);
     setRecipe(r);
-    setSteps(buildSteps(r, T));
+    setSteps(buildSteps(activeMethod, r, T));
     goTo("recipe");
   }
 
@@ -810,6 +844,7 @@ export default function ChemexBrewCoach() {
     const brew = {
       id: `${Date.now()}`,
       date: new Date().toISOString(),
+      method: recipe.method,
       roast: recipe.roast,
       coffeeDose: recipe.dose,
       water: recipe.water,
@@ -857,14 +892,19 @@ export default function ChemexBrewCoach() {
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         {/* Sidhuvud */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
-          <button
-            className="cbc-btn"
-            onClick={goHome}
-            style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
-          >
-            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 }}>{T.appTitle}</div>
-          </button>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+          <div>
+            <button
+              className="cbc-btn"
+              onClick={goHome}
+              style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
+            >
+              <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 }}>
+                {activeMethod.label} {T.brandSuffix}
+              </div>
+            </button>
+            <div>{methodSelect}</div>
+          </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
               <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
@@ -929,7 +969,12 @@ export default function ChemexBrewCoach() {
                 </div>
                 <div style={{ marginTop: -6, marginRight: -12 }}>
                   <BrewGauge
-                    recipe={last ? { water: last.water, bloom: last.coffeeDose * 2, pours: [0, 0, last.water] } : { water: 480, bloom: 60, pours: [0, 0, 480] }}
+                    methodKey={last ? last.method || "chemex" : method}
+                    recipe={
+                      last
+                        ? { water: last.water, bloom: last.coffeeDose * 2, pours: METHODS[last.method || "chemex"].pours(last.coffeeDose * 2, last.water) }
+                        : { water: 480, bloom: 60, pours: activeMethod.pours(60, 480) }
+                    }
                     poured={last ? last.water : 0}
                   />
                 </div>
@@ -939,29 +984,32 @@ export default function ChemexBrewCoach() {
                   <>
                     <div style={{ fontSize: 14, lineHeight: 1.55, color: C.ink2, borderTop: `1px solid ${C.line}`, paddingTop: 14, marginBottom: 14 }}>
                       {T.home.lastSuggestion(
-                        grindNote(last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
+                        grindNote(last.method || "chemex", last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
                         last.suggestedNext.temperature,
                         last.suggestedNext.ratio
                       )}
                     </div>
                     <Button
                       onClick={() =>
-                        openSetup({
-                          roast: last.roast,
-                          inputMode: "dose",
-                          dose: last.coffeeDose,
-                          ratio: last.suggestedNext.ratio,
-                          temperature: last.suggestedNext.temperature,
-                          grindOffset: last.suggestedNext.grindOffset,
-                          roastDate: last.roastDate || null,
-                          bestBefore: last.bestBefore || null,
-                        })
+                        openSetup(
+                          {
+                            roast: last.roast,
+                            inputMode: "dose",
+                            dose: last.coffeeDose,
+                            ratio: last.suggestedNext.ratio,
+                            temperature: last.suggestedNext.temperature,
+                            grindOffset: last.suggestedNext.grindOffset,
+                            roastDate: last.roastDate || null,
+                            bestBefore: last.bestBefore || null,
+                          },
+                          last.method || "chemex"
+                        )
                       }
                     >
                       {T.home.continueFromLast}
                     </Button>
                     <div style={{ height: 8 }} />
-                    <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: ROASTS[cfg.roast].temp })}>
+                    <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp })}>
                       {T.home.newFromZero}
                     </Button>
                   </>
@@ -981,7 +1029,7 @@ export default function ChemexBrewCoach() {
             <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 18px", fontWeight: 400 }}>{T.setup.heading}</h2>
 
             <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.setup.roastLevel}</div>
-            {Object.values(ROASTS).map((r) => (
+            {Object.values(activeMethod.ROASTS).map((r) => (
               <Choice
                 key={r.key}
                 label={T.roasts[r.key].label}
@@ -1022,16 +1070,16 @@ export default function ChemexBrewCoach() {
                 <Stepper
                   value={cfg.dose}
                   suffix={T.setup.gCoffeeSuffix}
-                  min={12}
-                  max={75}
+                  min={activeMethod.doseRange.min}
+                  max={activeMethod.doseRange.max}
                   step={1}
                   bigStep={5}
                   onChange={(v) => setCfg((c) => ({ ...c, dose: v }))}
                   decreaseLabel={T.decrease}
                   increaseLabel={T.increase}
                 />
-                {cfg.dose > 65 && (
-                  <div style={{ fontSize: 12.5, color: C.hot, marginTop: 8, lineHeight: 1.45 }}>{T.setup.overDose}</div>
+                {cfg.dose > activeMethod.doseRange.warnAbove && (
+                  <div style={{ fontSize: 12.5, color: C.hot, marginTop: 8, lineHeight: 1.45 }}>{T.methods[activeMethod.key].overDose}</div>
                 )}
               </>
             ) : (
@@ -1054,8 +1102,8 @@ export default function ChemexBrewCoach() {
             <Stepper
               value={cfg.ratio}
               prefix="1:"
-              min={13}
-              max={19}
+              min={activeMethod.ratioRange.min}
+              max={activeMethod.ratioRange.max}
               step={1}
               onChange={(v) => setCfg((c) => ({ ...c, ratio: v }))}
               decreaseLabel={T.decrease}
@@ -1169,7 +1217,7 @@ export default function ChemexBrewCoach() {
             <Card style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <div style={{ marginLeft: -8, marginTop: -4 }}>
-                  <BrewGauge recipe={recipe} poured={poured} />
+                  <BrewGauge methodKey={recipe.method} recipe={recipe} poured={poured} />
                 </div>
                 <div style={{ flex: 1, paddingTop: 4 }}>
                   <Eyebrow>{T.brewScreen.clock}</Eyebrow>
@@ -1301,21 +1349,24 @@ export default function ChemexBrewCoach() {
             {changeList(result.recipe, result.s, T).map((r) => (
               <Row key={r.label} label={r.label} value={r.value} accent={r.changed ? C.collar : C.ink3} />
             ))}
-            <Row label={T.next.newGrind} value={grindNote(result.recipe.roast, result.s.grindOffset, T)} />
+            <Row label={T.next.newGrind} value={grindNote(result.recipe.method, result.recipe.roast, result.s.grindOffset, T)} />
 
             <div style={{ marginTop: 22 }}>
               <Button
                 onClick={() =>
-                  openSetup({
-                    roast: result.recipe.roast,
-                    inputMode: "dose",
-                    dose: result.recipe.dose,
-                    ratio: result.s.ratio,
-                    temperature: result.s.temperature,
-                    grindOffset: result.s.grindOffset,
-                    roastDate: result.recipe.roastDate || null,
-                    bestBefore: result.recipe.bestBefore || null,
-                  })
+                  openSetup(
+                    {
+                      roast: result.recipe.roast,
+                      inputMode: "dose",
+                      dose: result.recipe.dose,
+                      ratio: result.s.ratio,
+                      temperature: result.s.temperature,
+                      grindOffset: result.s.grindOffset,
+                      roastDate: result.recipe.roastDate || null,
+                      bestBefore: result.recipe.bestBefore || null,
+                    },
+                    result.recipe.method
+                  )
                 }
               >
                 {T.next.useSuggestion}
@@ -1374,7 +1425,7 @@ export default function ChemexBrewCoach() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
                   <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
-                    {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                    {T.history.next} {grindNote(b.method || "chemex", b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
                   </div>
                   <button
                     className="cbc-btn"
