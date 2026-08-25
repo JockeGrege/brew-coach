@@ -820,7 +820,10 @@ export default function ChemexBrewCoach() {
             <Card style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                 <div style={{ flex: 1 }}>
-                  <Eyebrow>{last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}</Eyebrow>
+                  <Eyebrow>
+                    {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
+                    {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                  </Eyebrow>
                   {last ? (
                     <>
                       <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
