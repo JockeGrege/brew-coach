@@ -457,7 +457,7 @@ function Choice({ label, sub, selected, onClick }) {
     >
       <div style={{ fontWeight: 500 }}>{label}</div>
       {sub && (
-        <div style={{ fontSize: 12.5, marginTop: 3, color: selected ? "rgba(251,250,246,0.72)" : C.ink3, lineHeight: 1.4 }}>
+        <div style={{ fontSize: 12.5, marginTop: 3, color: selected ? C.card : C.ink3, opacity: selected ? 0.72 : 1, lineHeight: 1.4 }}>
           {sub}
         </div>
       )}
