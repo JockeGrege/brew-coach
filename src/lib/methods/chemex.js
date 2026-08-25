@@ -27,7 +27,7 @@ export const chemex = {
   ratioRange: { min: 13, max: 19, default: 16 },
   bloomClamp: [25, 80],
   ROASTS: {
-    light: { key: "light", tempMin: 96, tempMax: 97, temp: 97, t30: [240, 285], t45: [270, 315] },
+    light: { key: "light", tempMin: 95, tempMax: 96, temp: 96, t30: [240, 285], t45: [270, 315] },
     medium: { key: "medium", tempMin: 94, tempMax: 95, temp: 95, t30: [225, 270], t45: [255, 300] },
     dark: { key: "dark", tempMin: 92, tempMax: 93, temp: 93, t30: [210, 255], t45: [240, 285] },
   },
