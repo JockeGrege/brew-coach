@@ -26,6 +26,8 @@ const sv = {
     newFromZero: "Ny bryggning från noll",
     newBrew: "Ny bryggning",
     loadingBrews: "Läser in sparade bryggningar …",
+    inProgressEyebrow: "Pågående bryggning",
+    continueBrew: (methodLabel) => `Fortsätt ${methodLabel}-bryggningen`,
   },
 
   setup: {
@@ -128,8 +130,6 @@ const sv = {
     signOut: "Är du säker på att du vill logga ut?",
     clearAll: (n) => `Radera alla ${n} bryggningar? Det går inte att ångra.`,
     removeOne: "Ta bort den här bryggningen? Det går inte att ångra.",
-    abortBrew: "Vill du avbryta den pågående bryggningen? Framstegen sparas inte.",
-    abortBrewConfirm: "Avbryt bryggningen",
   },
 
   roasts: {
@@ -289,6 +289,8 @@ const en = {
     newFromZero: "New brew from scratch",
     newBrew: "New brew",
     loadingBrews: "Loading saved brews …",
+    inProgressEyebrow: "Brew in progress",
+    continueBrew: (methodLabel) => `Continue ${methodLabel} Brew`,
   },
 
   setup: {
@@ -391,8 +393,6 @@ const en = {
     signOut: "Are you sure you want to sign out?",
     clearAll: (n) => `Delete all ${n} brews? This can't be undone.`,
     removeOne: "Remove this brew? This can't be undone.",
-    abortBrew: "Abort the brew in progress? Your progress won't be saved.",
-    abortBrewConfirm: "Abort brewing",
   },
 
   roasts: {

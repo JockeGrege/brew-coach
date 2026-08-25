@@ -7,6 +7,7 @@ import { translations, useLang } from "./lib/i18n";
 import { METHODS, METHOD_ORDER } from "./lib/methods";
 import { useMethod } from "./lib/method";
 import { pourTimes, timeWindow } from "./lib/methods/shared";
+import { loadInProgress, saveInProgress, clearInProgress } from "./lib/inProgress";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
@@ -546,8 +547,12 @@ export default function ChemexBrewCoach() {
   // own defaults — a Chemex dose/ratio can sit outside a V60's sane range,
   // so there's nothing sensible to carry over. Roast, roast date and
   // best-before describe the coffee, not the method, so those stay put.
+  // Any brew actually underway for the method being left is untouched: it's
+  // continuously auto-saved (see the effect below) and reappears as a
+  // "Continue X Brew" prompt whenever that method is selected again.
   function handleMethodChange(nextKey) {
     const m = METHODS[nextKey];
+    setRunning(false);
     setMethod(nextKey);
     setCfg((c) => ({
       ...c,
@@ -556,26 +561,29 @@ export default function ChemexBrewCoach() {
       temperature: m.ROASTS[c.roast].temp,
       grindOffset: 0,
     }));
+    goTo("home");
   }
 
+  // Leaving the brew screen (back button, title, Setup's "Tillbaka", ...)
+  // no longer needs to warn about losing progress: the in-progress effect
+  // below keeps this method's brew saved continuously, so navigating away
+  // just pauses the clock — resuming happens from the "Continue X Brew"
+  // card on Home, which restores the clock paused too rather than guessing
+  // how long the user was away.
   function goHome() {
-    if (running) {
-      setConfirmAction({
-        message: T.confirm.abortBrew,
-        confirmLabel: T.confirm.abortBrewConfirm,
-        danger: true,
-        onConfirm: () => {
-          setRunning(false);
-          goTo("home");
-        },
-      });
-      return;
-    }
+    setRunning(false);
     goTo("home");
   }
 
   useEffect(() => {
     window.history.replaceState({ screen: "home" }, "");
+    function onPopState(e) {
+      setRunning(false);
+      setScreen(e.state?.screen || "home");
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   const [loaded, setLoaded] = useState(false);
@@ -603,38 +611,38 @@ export default function ChemexBrewCoach() {
   const [result, setResult] = useState(null);
   const tick = useRef(null);
 
-  // While a brew's clock is running, a back-navigation shouldn't silently
-  // discard it. We can't cancel a popstate after the fact, so instead we
-  // immediately re-push the "brew" entry to undo the browser's move (net
-  // effect: the URL/stack end up exactly as before) and ask for confirmation.
-  // Confirming sets this ref so the resulting programmatic back() is let
-  // through instead of being caught by the same guard again.
-  const bypassBackGuardRef = useRef(false);
+  // The brew currently underway for this method, if any — past Setup, with
+  // a built recipe. Kept in sync with localStorage (see the effect below)
+  // rather than re-read on every access, so the Home screen's "Continue X
+  // Brew" card updates immediately on save/clear/method-switch.
+  const [inProgress, setInProgress] = useState(() => loadInProgress(method));
 
   useEffect(() => {
-    function onPopState(e) {
-      const next = e.state?.screen || "home";
-      if (running && !bypassBackGuardRef.current) {
-        window.history.pushState({ screen: "brew" }, "");
-        setConfirmAction({
-          message: T.confirm.abortBrew,
-          confirmLabel: T.confirm.abortBrewConfirm,
-          danger: true,
-          onConfirm: () => {
-            setRunning(false);
-            bypassBackGuardRef.current = true;
-            window.history.back();
-          },
-        });
-        return;
-      }
-      bypassBackGuardRef.current = false;
-      setScreen(next);
-      window.scrollTo(0, 0);
-    }
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
-  }, [running, T]);
+    setInProgress(loadInProgress(method));
+  }, [method]);
+
+  // Once a recipe exists, the brew is worth resuming — auto-save it under
+  // this method's own slot on every change (including every clock tick)
+  // so switching methods, or just closing the app, never loses it. Setup
+  // alone (no recipe yet) isn't saved: it's just a form, cheap to redo.
+  useEffect(() => {
+    if (!recipe || !["recipe", "brew", "feedback"].includes(screen)) return;
+    const snapshot = { screen, recipe, steps, stepIndex, elapsed, running, fb, actual };
+    saveInProgress(recipe.method, snapshot);
+    setInProgress(snapshot);
+  }, [screen, recipe, steps, stepIndex, elapsed, running, fb, actual]);
+
+  function resumeInProgress() {
+    if (!inProgress) return;
+    setRecipe(inProgress.recipe);
+    setSteps(inProgress.steps);
+    setStepIndex(inProgress.stepIndex);
+    setElapsed(inProgress.elapsed);
+    setRunning(false);
+    setFb(inProgress.fb);
+    setActual(inProgress.actual);
+    goTo(inProgress.screen);
+  }
 
   /* Ladda sparade bryggningar från Firestore */
   useEffect(() => {
@@ -663,8 +671,10 @@ export default function ChemexBrewCoach() {
     await persist(brews.filter((b) => b.id !== id));
   }
 
+  // Only clears the current method's brews — keeps everything belonging
+  // to the other method untouched.
   async function clearAllBrews() {
-    await persist([]);
+    await persist(brews.filter((b) => (b.method || "chemex") !== method));
   }
 
   /* Klocka */
@@ -804,7 +814,13 @@ export default function ChemexBrewCoach() {
     );
   }
 
-  const last = brews[0] || null;
+  // Chemex and V60 keep fully separate history: the home screen's "last
+  // brew" card, the history count/list, and clearing history all only ever
+  // see brews made with the currently selected method. Brews saved before
+  // method-tracking existed have no .method field and are treated as
+  // Chemex, matching what the app only ever brewed at the time.
+  const methodBrews = brews.filter((b) => (b.method || "chemex") === method);
+  const last = methodBrews[0] || null;
 
   /* --- flödeshjälpare --- */
 
@@ -868,6 +884,8 @@ export default function ChemexBrewCoach() {
       suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio },
     };
     setResult({ recipe, s });
+    clearInProgress(recipe.method);
+    setInProgress(null);
     await persist([brew, ...brews].slice(0, 60));
     goTo("next");
   }
@@ -875,6 +893,12 @@ export default function ChemexBrewCoach() {
   const poured = (() => {
     if (!recipe) return 0;
     const done = steps.slice(0, stepIndex).filter((s) => s.target);
+    return done.length ? done[done.length - 1].target : 0;
+  })();
+
+  const inProgressPoured = (() => {
+    if (!inProgress) return 0;
+    const done = inProgress.steps.slice(0, inProgress.stepIndex).filter((s) => s.target);
     return done.length ? done[done.length - 1].target : 0;
   })();
 
@@ -913,9 +937,9 @@ export default function ChemexBrewCoach() {
             <div>{methodSelect}</div>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {brews.length > 0 && screen !== "history" && (
+            {methodBrews.length > 0 && screen !== "history" && (
               <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
-                {T.historyNav(brews.length)}
+                {T.historyNav(methodBrews.length)}
               </button>
             )}
             <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
@@ -950,6 +974,31 @@ export default function ChemexBrewCoach() {
         {/* ---------------- Startsida ---------------- */}
         {screen === "home" && (
           <div>
+            {inProgress && (
+              <Card style={{ padding: 0, overflow: "hidden", marginBottom: 12 }}>
+                <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <Eyebrow>{T.home.inProgressEyebrow}</Eyebrow>
+                    <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
+                      {T.roasts[inProgress.recipe.roast].label}
+                      <br />
+                      {inProgress.recipe.dose} g
+                    </div>
+                    <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 12, lineHeight: 1.7 }}>
+                      {inProgress.recipe.water} g · 1:{inProgress.recipe.ratio}
+                      <br />
+                      {fmt(inProgress.elapsed)}
+                    </div>
+                  </div>
+                  <div style={{ marginTop: -6, marginRight: -12 }}>
+                    <BrewGauge methodKey={inProgress.recipe.method} recipe={inProgress.recipe} poured={inProgressPoured} />
+                  </div>
+                </div>
+                <div style={{ padding: "10px 18px 18px" }}>
+                  <Button onClick={resumeInProgress}>{T.home.continueBrew(activeMethod.label)}</Button>
+                </div>
+              </Card>
+            )}
             <Card style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                 <div style={{ flex: 1 }}>
@@ -1393,13 +1442,13 @@ export default function ChemexBrewCoach() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
                 <div>
                   <Eyebrow>{T.history.eyebrow}</Eyebrow>
-                  <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
+                  <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(methodBrews.length)}</h2>
                 </div>
                 <button
                   className="cbc-btn"
                   onClick={() =>
                     setConfirmAction({
-                      message: T.confirm.clearAll(brews.length),
+                      message: T.confirm.clearAll(methodBrews.length),
                       confirmLabel: T.history.clearAll,
                       danger: true,
                       onConfirm: () => clearAllBrews(),
@@ -1412,7 +1461,7 @@ export default function ChemexBrewCoach() {
               </div>
             </Card>
 
-            {brews.map((b) => (
+            {methodBrews.map((b) => (
               <Card key={b.id} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
                   <span style={{ fontSize: 15, fontWeight: 500 }}>{T.roasts[b.roast].label}</span>
