@@ -777,7 +777,7 @@ export default function ChemexBrewCoach() {
             onClick={() => setScreen("home")}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
-            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em" }}>{T.appTitle}</div>
+            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink }}>{T.appTitle}</div>
           </button>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
