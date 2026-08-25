@@ -959,6 +959,7 @@ export default function ChemexBrewCoach() {
                   min={12}
                   max={75}
                   step={1}
+                  bigStep={5}
                   onChange={(v) => setCfg((c) => ({ ...c, dose: v }))}
                   decreaseLabel={T.decrease}
                   increaseLabel={T.increase}
@@ -1338,21 +1339,26 @@ export default function ChemexBrewCoach() {
 }
 
 /* Sifferväljare med tumvänliga knappar */
-function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "", decreaseLabel = "Decrease", increaseLabel = "Increase" }) {
+function Stepper({ value, onChange, min, max, step, bigStep, prefix = "", suffix = "", decreaseLabel = "Decrease", increaseLabel = "Increase" }) {
   const btn = {
-    width: 46,
+    width: 42,
     height: 46,
     borderRadius: 3,
     border: `1px solid ${C.line}`,
     background: "transparent",
     color: C.ink,
-    fontSize: 20,
+    fontSize: 17,
     cursor: "pointer",
     fontFamily: F.mono,
     lineHeight: 1,
   };
   return (
-    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+      {bigStep && (
+        <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - bigStep, min, max))} aria-label={`${decreaseLabel} ${bigStep}`}>
+          −{bigStep}
+        </button>
+      )}
       <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - step, min, max))} aria-label={decreaseLabel}>
         –
       </button>
@@ -1376,6 +1382,11 @@ function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "", de
       <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + step, min, max))} aria-label={increaseLabel}>
         +
       </button>
+      {bigStep && (
+        <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + bigStep, min, max))} aria-label={`${increaseLabel} ${bigStep}`}>
+          +{bigStep}
+        </button>
+      )}
     </div>
   );
 }
