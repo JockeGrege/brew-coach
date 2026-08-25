@@ -540,7 +540,7 @@ function BrewGauge({ recipe, poured }) {
 const STORE_KEY = "chemex:v1";
 
 export default function ChemexBrewCoach() {
-  const user = useAuth();
+  const { user, authError } = useAuth();
   const [screen, setScreen] = useState("home");
   const [loaded, setLoaded] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -618,6 +618,11 @@ export default function ChemexBrewCoach() {
             <div style={{ fontSize: 14, color: C.ink2, marginBottom: 26, lineHeight: 1.5 }}>
               Logga in för att spara och synka dina bryggningar mellan enheter.
             </div>
+            {authError && (
+              <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 18, borderRadius: 3, textAlign: "left" }}>
+                Inloggningen misslyckades: {authError}
+              </div>
+            )}
             <Button onClick={() => signInWithGoogle()}>Logga in med Google</Button>
           </Card>
         </div>

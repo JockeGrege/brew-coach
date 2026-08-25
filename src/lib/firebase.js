@@ -3,6 +3,7 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithRedirect,
+  getRedirectResult,
   signOut as firebaseSignOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -34,4 +35,11 @@ export function signOut() {
 
 export function onAuthChange(callback) {
   return onAuthStateChanged(auth, callback);
+}
+
+// onAuthStateChanged alone reports the outcome of a completed redirect sign-in,
+// but not why one failed. Calling this surfaces that error instead of just
+// silently landing back on the sign-in screen.
+export function consumeRedirectResult() {
+  return getRedirectResult(auth);
 }
