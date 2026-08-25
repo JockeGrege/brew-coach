@@ -546,6 +546,25 @@ export default function ChemexBrewCoach() {
   const [authError, setAuthError] = useState(null);
   const [confirmAction, setConfirmAction] = useState(null);
   const [screen, setScreen] = useState("home");
+
+  // Wires the phone's back button/gesture into screen navigation instead of
+  // it just exiting the installed app. Each forward navigation pushes a
+  // history entry; going back pops one, and the popstate handler below
+  // syncs `screen` to match — so back retraces exactly the path taken,
+  // and pressing back from the home screen (nothing left to pop) falls
+  // through to whatever the browser would normally do, i.e. exit/close.
+  function goTo(next) {
+    window.history.pushState({ screen: next }, "");
+    setScreen(next);
+  }
+
+  useEffect(() => {
+    window.history.replaceState({ screen: "home" }, "");
+    const onPopState = (e) => setScreen(e.state?.screen || "home");
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
   const [loaded, setLoaded] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
   const [brews, setBrews] = useState([]);
@@ -707,7 +726,7 @@ export default function ChemexBrewCoach() {
 
   function openSetup(prefill) {
     setCfg((c) => ({ ...c, ...prefill }));
-    setScreen("setup");
+    goTo("setup");
   }
 
   function toRecipe() {
@@ -715,14 +734,14 @@ export default function ChemexBrewCoach() {
     const r = buildRecipe({ ...cfg, dose }, T);
     setRecipe(r);
     setSteps(buildSteps(r, T));
-    setScreen("recipe");
+    goTo("recipe");
   }
 
   function startBrew() {
     setStepIndex(0);
     setElapsed(0);
     setRunning(false);
-    setScreen("brew");
+    goTo("brew");
   }
 
   function nextStep() {
@@ -733,7 +752,7 @@ export default function ChemexBrewCoach() {
       const [lo, hi] = [recipe.targetLo, recipe.targetHi];
       setActual(elapsed);
       setFb({ taste: null, flow: elapsed > hi ? "slow" : elapsed < lo ? "fast" : "ok", comment: "" });
-      setScreen("feedback");
+      goTo("feedback");
       return;
     }
     setStepIndex((i) => i + 1);
@@ -761,7 +780,7 @@ export default function ChemexBrewCoach() {
     };
     setResult({ recipe, s });
     await persist([brew, ...brews].slice(0, 60));
-    setScreen("next");
+    goTo("next");
   }
 
   const poured = (() => {
@@ -794,14 +813,14 @@ export default function ChemexBrewCoach() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
           <button
             className="cbc-btn"
-            onClick={() => setScreen("home")}
+            onClick={() => goTo("home")}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
             <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 }}>{T.appTitle}</div>
           </button>
           <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
-              <button className="cbc-btn" onClick={() => setScreen("history")} style={navBtnStyle}>
+              <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
                 {T.historyNav(brews.length)}
               </button>
             )}
@@ -1047,7 +1066,7 @@ export default function ChemexBrewCoach() {
 
             <div style={{ marginTop: 24 }}>
               <Button onClick={toRecipe}>{T.setup.showRecipe}</Button>
-              <Button variant="plain" onClick={() => setScreen("home")} style={{ marginTop: 6 }}>
+              <Button variant="plain" onClick={() => window.history.back()} style={{ marginTop: 6 }}>
                 {T.setup.back}
               </Button>
             </div>
@@ -1090,7 +1109,7 @@ export default function ChemexBrewCoach() {
 
             <div style={{ marginTop: 22 }}>
               <Button onClick={startBrew}>{T.recipe.startBrewing}</Button>
-              <Button variant="plain" onClick={() => setScreen("setup")} style={{ marginTop: 6 }}>
+              <Button variant="plain" onClick={() => window.history.back()} style={{ marginTop: 6 }}>
                 {T.recipe.changeSettings}
               </Button>
             </div>
@@ -1255,7 +1274,7 @@ export default function ChemexBrewCoach() {
                 {T.next.useSuggestion}
               </Button>
               <div style={{ height: 8 }} />
-              <Button variant="quiet" onClick={() => setScreen("home")}>
+              <Button variant="quiet" onClick={() => goTo("home")}>
                 {T.next.done}
               </Button>
             </div>
@@ -1328,7 +1347,7 @@ export default function ChemexBrewCoach() {
               </Card>
             ))}
 
-            <Button variant="quiet" onClick={() => setScreen("home")} style={{ marginTop: 6 }}>
+            <Button variant="quiet" onClick={() => goTo("home")} style={{ marginTop: 6 }}>
               {T.history.toHome}
             </Button>
           </div>
