@@ -547,43 +547,68 @@ export default function ChemexBrewCoach() {
   // own defaults — a Chemex dose/ratio can sit outside a V60's sane range,
   // so there's nothing sensible to carry over. Roast, roast date and
   // best-before describe the coffee, not the method, so those stay put.
-  // Any brew actually underway for the method being left is untouched: it's
-  // continuously auto-saved (see the effect below) and reappears as a
-  // "Continue X Brew" prompt whenever that method is selected again.
+  // While the clock is running this counts as leaving an ongoing brew, so
+  // it's gated behind the same abort confirmation as goHome/back below.
   function handleMethodChange(nextKey) {
-    const m = METHODS[nextKey];
-    setRunning(false);
-    setMethod(nextKey);
-    setCfg((c) => ({
-      ...c,
-      dose: m.doseRange.default,
-      ratio: m.ratioRange.default,
-      temperature: m.ROASTS[c.roast].temp,
-      grindOffset: 0,
-    }));
-    goTo("home");
+    function apply() {
+      const m = METHODS[nextKey];
+      setRunning(false);
+      setMethod(nextKey);
+      setCfg((c) => ({
+        ...c,
+        dose: m.doseRange.default,
+        ratio: m.ratioRange.default,
+        temperature: m.ROASTS[c.roast].temp,
+        grindOffset: 0,
+      }));
+      goTo("home");
+    }
+    if (running) {
+      setConfirmAction({
+        message: T.confirm.abortBrew,
+        confirmLabel: T.confirm.abortBrewConfirm,
+        danger: true,
+        onConfirm: () => {
+          if (recipe) {
+            clearInProgress(recipe.method);
+            setInProgress(null);
+          }
+          apply();
+        },
+      });
+      return;
+    }
+    apply();
   }
 
-  // Leaving the brew screen (back button, title, Setup's "Tillbaka", ...)
-  // no longer needs to warn about losing progress: the in-progress effect
-  // below keeps this method's brew saved continuously, so navigating away
-  // just pauses the clock — resuming happens from the "Continue X Brew"
-  // card on Home, which restores the clock paused too rather than guessing
-  // how long the user was away.
+  // Leaving an ongoing brew (clock running) always asks for confirmation —
+  // confirming aborts it for good (the saved in-progress snapshot for this
+  // method is cleared too, so there's nothing left to resume). Leaving a
+  // paused brew, or one that hasn't started ticking yet, needs no prompt:
+  // the in-progress effect below keeps it saved automatically, resumable
+  // later from the "Continue X Brew" card on Home.
   function goHome() {
-    setRunning(false);
+    if (running) {
+      setConfirmAction({
+        message: T.confirm.abortBrew,
+        confirmLabel: T.confirm.abortBrewConfirm,
+        danger: true,
+        onConfirm: () => {
+          setRunning(false);
+          if (recipe) {
+            clearInProgress(recipe.method);
+            setInProgress(null);
+          }
+          goTo("home");
+        },
+      });
+      return;
+    }
     goTo("home");
   }
 
   useEffect(() => {
     window.history.replaceState({ screen: "home" }, "");
-    function onPopState(e) {
-      setRunning(false);
-      setScreen(e.state?.screen || "home");
-      window.scrollTo(0, 0);
-    }
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   const [loaded, setLoaded] = useState(false);
@@ -643,6 +668,44 @@ export default function ChemexBrewCoach() {
     setActual(inProgress.actual);
     goTo(inProgress.screen);
   }
+
+  // While a brew's clock is running, a back-navigation shouldn't silently
+  // abort it. We can't cancel a popstate after the fact, so instead we
+  // immediately re-push the "brew" entry to undo the browser's move (net
+  // effect: the URL/stack end up exactly as before) and ask for confirmation.
+  // Confirming clears this method's in-progress snapshot too — an aborted
+  // brew has nothing left to resume — then sets this ref so the resulting
+  // programmatic back() is let through instead of being caught again.
+  const bypassBackGuardRef = useRef(false);
+
+  useEffect(() => {
+    function onPopState(e) {
+      const next = e.state?.screen || "home";
+      if (running && !bypassBackGuardRef.current) {
+        window.history.pushState({ screen: "brew" }, "");
+        setConfirmAction({
+          message: T.confirm.abortBrew,
+          confirmLabel: T.confirm.abortBrewConfirm,
+          danger: true,
+          onConfirm: () => {
+            setRunning(false);
+            if (recipe) {
+              clearInProgress(recipe.method);
+              setInProgress(null);
+            }
+            bypassBackGuardRef.current = true;
+            window.history.back();
+          },
+        });
+        return;
+      }
+      bypassBackGuardRef.current = false;
+      setScreen(next);
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [running, T, recipe]);
 
   /* Ladda sparade bryggningar från Firestore */
   useEffect(() => {
