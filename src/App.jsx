@@ -556,13 +556,27 @@ export default function ChemexBrewCoach() {
   function goTo(next) {
     window.history.pushState({ screen: next }, "");
     setScreen(next);
+    window.scrollTo(0, 0);
+  }
+
+  function goHome() {
+    if (running) {
+      setConfirmAction({
+        message: T.confirm.abortBrew,
+        confirmLabel: T.confirm.abortBrewConfirm,
+        danger: true,
+        onConfirm: () => {
+          setRunning(false);
+          goTo("home");
+        },
+      });
+      return;
+    }
+    goTo("home");
   }
 
   useEffect(() => {
     window.history.replaceState({ screen: "home" }, "");
-    const onPopState = (e) => setScreen(e.state?.screen || "home");
-    window.addEventListener("popstate", onPopState);
-    return () => window.removeEventListener("popstate", onPopState);
   }, []);
 
   const [loaded, setLoaded] = useState(false);
@@ -579,6 +593,39 @@ export default function ChemexBrewCoach() {
   const [actual, setActual] = useState(0);
   const [result, setResult] = useState(null);
   const tick = useRef(null);
+
+  // While a brew's clock is running, a back-navigation shouldn't silently
+  // discard it. We can't cancel a popstate after the fact, so instead we
+  // immediately re-push the "brew" entry to undo the browser's move (net
+  // effect: the URL/stack end up exactly as before) and ask for confirmation.
+  // Confirming sets this ref so the resulting programmatic back() is let
+  // through instead of being caught by the same guard again.
+  const bypassBackGuardRef = useRef(false);
+
+  useEffect(() => {
+    function onPopState(e) {
+      const next = e.state?.screen || "home";
+      if (running && !bypassBackGuardRef.current) {
+        window.history.pushState({ screen: "brew" }, "");
+        setConfirmAction({
+          message: T.confirm.abortBrew,
+          confirmLabel: T.confirm.abortBrewConfirm,
+          danger: true,
+          onConfirm: () => {
+            setRunning(false);
+            bypassBackGuardRef.current = true;
+            window.history.back();
+          },
+        });
+        return;
+      }
+      bypassBackGuardRef.current = false;
+      setScreen(next);
+      window.scrollTo(0, 0);
+    }
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, [running, T]);
 
   /* Ladda sparade bryggningar från Firestore */
   useEffect(() => {
@@ -813,7 +860,7 @@ export default function ChemexBrewCoach() {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 20 }}>
           <button
             className="cbc-btn"
-            onClick={() => goTo("home")}
+            onClick={goHome}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
             <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em", color: C.ink, whiteSpace: "nowrap", flexShrink: 0 }}>{T.appTitle}</div>
