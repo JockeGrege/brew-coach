@@ -659,13 +659,37 @@ export default function ChemexBrewCoach() {
 
   function resumeInProgress() {
     if (!inProgress) return;
-    setRecipe(inProgress.recipe);
+    const r = inProgress.recipe;
+    // Restore cfg to match the resumed recipe, so if the user backs out to
+    // Setup it shows the settings that actually produced this brew instead
+    // of whatever cfg happened to be left over from something else.
+    setCfg((c) => ({
+      ...c,
+      roast: r.roast,
+      inputMode: "dose",
+      dose: r.dose,
+      ratio: r.ratio,
+      temperature: r.temperature,
+      grindOffset: r.grindOffset,
+      roastDate: r.roastDate,
+      bestBefore: r.bestBefore,
+    }));
+    setRecipe(r);
     setSteps(inProgress.steps);
     setStepIndex(inProgress.stepIndex);
     setElapsed(inProgress.elapsed);
     setRunning(false);
     setFb(inProgress.fb);
     setActual(inProgress.actual);
+
+    // Resuming jumps straight to wherever the brew was left, but "back"
+    // (the hardware gesture, Setup's "Tillbaka", Recipe's "Ändra
+    // inställningar") should still retrace the normal setup → recipe →
+    // brew → feedback path rather than landing straight back on Home.
+    // Push the skipped screens first so the history stack matches what a
+    // normal forward walk through the flow would have produced.
+    const path = { recipe: ["setup"], brew: ["setup", "recipe"], feedback: ["setup", "recipe", "brew"] }[inProgress.screen] || [];
+    path.forEach((s) => window.history.pushState({ screen: s }, ""));
     goTo(inProgress.screen);
   }
 
@@ -1038,7 +1062,36 @@ export default function ChemexBrewCoach() {
         {screen === "home" && (
           <div>
             {inProgress && (
-              <Card style={{ padding: 0, overflow: "hidden", marginBottom: 12 }}>
+              <Card style={{ padding: 0, overflow: "hidden", marginBottom: 12, position: "relative" }}>
+                <button
+                  className="cbc-btn"
+                  onClick={() =>
+                    setConfirmAction({
+                      message: T.confirm.abortBrew,
+                      confirmLabel: T.confirm.abortBrewConfirm,
+                      danger: true,
+                      onConfirm: () => {
+                        clearInProgress(inProgress.recipe.method);
+                        setInProgress(null);
+                      },
+                    })
+                  }
+                  aria-label={T.confirm.abortBrewConfirm}
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 10,
+                    background: "none",
+                    border: "none",
+                    cursor: "pointer",
+                    fontSize: 18,
+                    lineHeight: 1,
+                    color: C.ink3,
+                    padding: 4,
+                  }}
+                >
+                  ×
+                </button>
                 <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                   <div style={{ flex: 1 }}>
                     <Eyebrow>{T.home.inProgressEyebrow}</Eyebrow>
@@ -1062,81 +1115,87 @@ export default function ChemexBrewCoach() {
                 </div>
               </Card>
             )}
-            <Card style={{ padding: 0, overflow: "hidden" }}>
-              <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
-                <div style={{ flex: 1 }}>
-                  <Eyebrow>
-                    {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
-                    {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
-                  </Eyebrow>
+            {/* Skipped when there's an in-progress brew but nothing completed
+                yet: "no brew yet" right below "brew in progress" reads as
+                contradictory, and once there's a last brew this card is
+                shown regardless. */}
+            {(last || !inProgress) && (
+              <Card style={{ padding: 0, overflow: "hidden" }}>
+                <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <Eyebrow>
+                      {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
+                      {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                    </Eyebrow>
+                    {last ? (
+                      <>
+                        <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
+                          {T.roasts[last.roast].label}
+                          <br />
+                          {T.home.becamePrefix} {T.taste[last.feedback.taste]}
+                        </div>
+                        <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 12, lineHeight: 1.7 }}>
+                          {last.coffeeDose} g · {last.water} g · 1:{last.ratio}
+                          <br />
+                          {last.temperature} °C · {last.actualTime}
+                        </div>
+                      </>
+                    ) : (
+                      <div style={{ fontFamily: F.display, fontSize: 25, lineHeight: 1.2, marginTop: 10 }}>{T.home.brewACup}</div>
+                    )}
+                  </div>
+                  <div style={{ marginTop: -6, marginRight: -12 }}>
+                    <BrewGauge
+                      methodKey={last ? last.method || "chemex" : method}
+                      recipe={
+                        last
+                          ? { water: last.water, bloom: last.coffeeDose * 2, pours: METHODS[last.method || "chemex"].pours(last.coffeeDose * 2, last.water) }
+                          : { water: 480, bloom: 60, pours: activeMethod.pours(60, 480) }
+                      }
+                      poured={last ? last.water : 0}
+                    />
+                  </div>
+                </div>
+                <div style={{ padding: "10px 18px 18px" }}>
                   {last ? (
                     <>
-                      <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
-                        {T.roasts[last.roast].label}
-                        <br />
-                        {T.home.becamePrefix} {T.taste[last.feedback.taste]}
+                      <div style={{ fontSize: 14, lineHeight: 1.55, color: C.ink2, borderTop: `1px solid ${C.line}`, paddingTop: 14, marginBottom: 14 }}>
+                        {T.home.lastSuggestion(
+                          grindNote(last.method || "chemex", last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
+                          last.suggestedNext.temperature,
+                          last.suggestedNext.ratio
+                        )}
                       </div>
-                      <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 12, lineHeight: 1.7 }}>
-                        {last.coffeeDose} g · {last.water} g · 1:{last.ratio}
-                        <br />
-                        {last.temperature} °C · {last.actualTime}
-                      </div>
+                      <Button
+                        onClick={() =>
+                          openSetup(
+                            {
+                              roast: last.roast,
+                              inputMode: "dose",
+                              dose: last.coffeeDose,
+                              ratio: last.suggestedNext.ratio,
+                              temperature: last.suggestedNext.temperature,
+                              grindOffset: last.suggestedNext.grindOffset,
+                              roastDate: last.roastDate || null,
+                              bestBefore: last.bestBefore || null,
+                            },
+                            last.method || "chemex"
+                          )
+                        }
+                      >
+                        {T.home.continueFromLast}
+                      </Button>
+                      <div style={{ height: 8 }} />
+                      <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp })}>
+                        {T.home.newFromZero}
+                      </Button>
                     </>
                   ) : (
-                    <div style={{ fontFamily: F.display, fontSize: 25, lineHeight: 1.2, marginTop: 10 }}>{T.home.brewACup}</div>
+                    <Button onClick={() => openSetup({})}>{T.home.newBrew}</Button>
                   )}
                 </div>
-                <div style={{ marginTop: -6, marginRight: -12 }}>
-                  <BrewGauge
-                    methodKey={last ? last.method || "chemex" : method}
-                    recipe={
-                      last
-                        ? { water: last.water, bloom: last.coffeeDose * 2, pours: METHODS[last.method || "chemex"].pours(last.coffeeDose * 2, last.water) }
-                        : { water: 480, bloom: 60, pours: activeMethod.pours(60, 480) }
-                    }
-                    poured={last ? last.water : 0}
-                  />
-                </div>
-              </div>
-              <div style={{ padding: "10px 18px 18px" }}>
-                {last ? (
-                  <>
-                    <div style={{ fontSize: 14, lineHeight: 1.55, color: C.ink2, borderTop: `1px solid ${C.line}`, paddingTop: 14, marginBottom: 14 }}>
-                      {T.home.lastSuggestion(
-                        grindNote(last.method || "chemex", last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
-                        last.suggestedNext.temperature,
-                        last.suggestedNext.ratio
-                      )}
-                    </div>
-                    <Button
-                      onClick={() =>
-                        openSetup(
-                          {
-                            roast: last.roast,
-                            inputMode: "dose",
-                            dose: last.coffeeDose,
-                            ratio: last.suggestedNext.ratio,
-                            temperature: last.suggestedNext.temperature,
-                            grindOffset: last.suggestedNext.grindOffset,
-                            roastDate: last.roastDate || null,
-                            bestBefore: last.bestBefore || null,
-                          },
-                          last.method || "chemex"
-                        )
-                      }
-                    >
-                      {T.home.continueFromLast}
-                    </Button>
-                    <div style={{ height: 8 }} />
-                    <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp })}>
-                      {T.home.newFromZero}
-                    </Button>
-                  </>
-                ) : (
-                  <Button onClick={() => openSetup({})}>{T.home.newBrew}</Button>
-                )}
-              </div>
-            </Card>
+              </Card>
+            )}
             {!loaded && <div style={{ fontSize: 13, color: C.ink3, marginTop: 12 }}>{T.home.loadingBrews}</div>}
           </div>
         )}
