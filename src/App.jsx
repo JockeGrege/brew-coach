@@ -475,6 +475,7 @@ function declutterMarks(marks, water, top, bottom) {
    metoder ritar sig själva utan att röra den här komponenten. */
 function BrewGauge({ methodKey, recipe, poured }) {
   const g = METHODS[methodKey].gauge;
+  const mx = g.marksX || { tick1: 84, tick2: 96, label: 100 };
   const frac = clamp(poured / recipe.water, 0, 1);
   const fillY = g.bottom - frac * (g.bottom - g.top);
   const marks = [{ g: recipe.bloom, l: "bloom" }, ...recipe.pours.map((v, i) => ({ g: v, l: String(i + 1) }))];
@@ -491,15 +492,21 @@ function BrewGauge({ methodKey, recipe, poured }) {
       </g>
       {g.decor.map((d, i) =>
         d.path ? (
-          <path key={i} d={d.path} fill={d.fillToken ? C[d.fillToken] : d.fill} />
+          <path
+            key={i}
+            d={d.path}
+            fill={d.fillToken ? C[d.fillToken] : d.fill || "none"}
+            stroke={d.stroke}
+            strokeWidth={d.stroke ? d.strokeWidth || 1.2 : undefined}
+          />
         ) : (
           <line key={i} x1={d.line.x1} y1={d.line.y1} x2={d.line.x2} y2={d.line.y2} stroke={d.stroke} strokeWidth={d.strokeWidth || 1.2} />
         )
       )}
       {declutterMarks(marks, recipe.water, g.top, g.bottom).map((m) => (
         <g key={m.l}>
-          <line x1="84" y1={m.y} x2="96" y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
-          <text x="100" y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
+          <line x1={mx.tick1} y1={m.y} x2={mx.tick2} y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
+          <text x={mx.label} y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
             {m.g} g
           </text>
         </g>

@@ -48,15 +48,27 @@ export const v60 = {
     viewBox: "0 0 168 172",
     width: 168,
     height: 172,
-    top: 40,
-    bottom: 150,
-    // Konformad tratt: rak avsmalning från bred kant ner mot det enda,
-    // centrerade hålet.
-    glassPath: "M20,40 L80,40 L54,150 L46,150 Z",
+    // Bryggnivån visas i servern (karaffen) längst ner, precis som i
+    // verkligheten — kaffet droppar genom tratten och samlas där.
+    top: 92,
+    bottom: 156,
+    glassPath: "M42,92 L62,92 L78,148 C78,153 74,156 69,156 L35,156 C30,156 26,153 26,148 Z",
+    // Marken flyttas ut lite extra åt höger jämfört med Chemex, så de inte
+    // kolliderar med handtaget på karaffen.
+    marksX: { tick1: 100, tick2: 112, label: 116 },
     decor: [
-      // Spiralribborna, antydda som två diagonala linjer i övre tredjedelen.
-      { line: { x1: 30, y1: 56, x2: 42, y2: 90 }, stroke: "#39362C" },
-      { line: { x1: 70, y1: 56, x2: 58, y2: 90 }, stroke: "#39362C" },
+      // Den bruna bandkanten längst upp på tratten.
+      { path: "M15,16 L89,16 L83,24 L21,24 Z", fillToken: "collar" },
+      // Själva tratten: bred kant som smalnar av mot det enda, centrerade hålet.
+      { path: "M21,24 L83,24 L60,84 L44,84 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Spiralribborna, antydda som tre linjer som viftar ut mot kanten.
+      { line: { x1: 52, y1: 28, x2: 52, y2: 82 }, stroke: "#39362C" },
+      { line: { x1: 32, y1: 32, x2: 46, y2: 82 }, stroke: "#39362C" },
+      { line: { x1: 72, y1: 32, x2: 58, y2: 82 }, stroke: "#39362C" },
+      // Bandet där tratten möter karaffen.
+      { path: "M42,84 L62,84 L62,92 L42,92 Z", fillToken: "collar" },
+      // Handtaget på karaffen.
+      { path: "M78,130 C92,128 92,154 78,152", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };
