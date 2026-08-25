@@ -2,8 +2,7 @@ import { initializeApp } from "firebase/app";
 import {
   getAuth,
   GoogleAuthProvider,
-  signInWithRedirect,
-  getRedirectResult,
+  signInWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -22,11 +21,12 @@ export const auth = getAuth(app);
 
 const googleProvider = new GoogleAuthProvider();
 
-// Redirect rather than popup: popup-based OAuth is unreliable once the app
-// is installed to a phone's home screen (iOS Safari in particular breaks it
-// in standalone display mode).
+// Popup rather than redirect: redirect needs sessionStorage to survive a
+// multi-hop cross-origin round trip (app -> authDomain -> Google -> authDomain
+// -> app), which privacy-hardened browsers (Brave Shields, strict tracking
+// protection) partition or clear, breaking it. Popup avoids that hop chain.
 export function signInWithGoogle() {
-  return signInWithRedirect(auth, googleProvider);
+  return signInWithPopup(auth, googleProvider);
 }
 
 export function signOut() {
@@ -35,11 +35,4 @@ export function signOut() {
 
 export function onAuthChange(callback) {
   return onAuthStateChanged(auth, callback);
-}
-
-// onAuthStateChanged alone reports the outcome of a completed redirect sign-in,
-// but not why one failed. Calling this surfaces that error instead of just
-// silently landing back on the sign-in screen.
-export function consumeRedirectResult() {
-  return getRedirectResult(auth);
 }
