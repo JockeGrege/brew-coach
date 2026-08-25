@@ -474,6 +474,29 @@ function Row({ label, value, accent }) {
   );
 }
 
+/* Gramskalans märken kan hamna nära varandra (t.ex. bloom nära en liten
+   hällning, eller flera märken på samma värde), vilket gör etiketterna
+   svåra att läsa. Slår ihop dubbletter och sprider isär resten tills alla
+   har minst MIN_LABEL_GAP mellan sig, sedan flyttas hela gruppen tillbaka
+   in om den svämmade över kant. */
+const MIN_LABEL_GAP = 12;
+
+function declutterMarks(marks, water, top, bottom) {
+  const byValue = new Map(marks.map((m) => [m.g, m]));
+  const positioned = [...byValue.values()]
+    .map((m) => ({ ...m, y: bottom - clamp(m.g / water, 0, 1) * (bottom - top) }))
+    .sort((a, b) => a.y - b.y);
+
+  for (let i = 1; i < positioned.length; i++) {
+    positioned[i].y = Math.max(positioned[i].y, positioned[i - 1].y + MIN_LABEL_GAP);
+  }
+  const overflow = positioned.length ? positioned[positioned.length - 1].y - bottom : 0;
+  if (overflow > 0) {
+    for (const m of positioned) m.y -= overflow;
+  }
+  return positioned;
+}
+
 /* Signaturen: Chemex-silhuetten som nivåmätare med gramskala */
 function BrewGauge({ recipe, poured }) {
   const frac = clamp(poured / recipe.water, 0, 1);
@@ -499,17 +522,14 @@ function BrewGauge({ recipe, poured }) {
       </g>
       <path d="M40,74 L60,74 L63,100 L37,100 Z" fill={C.collar} />
       <line x1="37" y1="87" x2="63" y2="87" stroke="#7C5427" strokeWidth="1.2" />
-      {marks.map((m) => {
-        const y = bottom - clamp(m.g / recipe.water, 0, 1) * (bottom - top);
-        return (
-          <g key={m.l}>
-            <line x1="84" y1={y} x2="96" y2={y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
-            <text x="100" y={y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
-              {m.g} g
-            </text>
-          </g>
-        );
-      })}
+      {declutterMarks(marks, recipe.water, top, bottom).map((m) => (
+        <g key={m.l}>
+          <line x1="84" y1={m.y} x2="96" y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
+          <text x="100" y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
+            {m.g} g
+          </text>
+        </g>
+      ))}
     </svg>
   );
 }
