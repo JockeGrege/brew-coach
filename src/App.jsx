@@ -2,32 +2,33 @@ import { useState, useEffect, useRef } from "react";
 import { loadBrews, saveBrews } from "./lib/brews";
 import { useAuth } from "./lib/useAuth";
 import { signInWithGoogle, signOut } from "./lib/firebase";
+import { PALETTES, useTheme } from "./lib/theme";
+import { translations, useLang } from "./lib/i18n";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
 /* ------------------------------------------------------------------ */
 
-const C = {
-  paper: "#E7E5DC",
-  card: "#FBFAF6",
-  ink: "#1B1D19",
-  ink2: "#5F635A",
-  ink3: "#8D9086",
-  line: "#D3D0C4",
-  collar: "#A9773C",
-  brew: "#452B18",
-  hot: "#9E3B24",
-  ok: "#3F6B4A",
-};
+// C holds CSS custom-property references, not literal colors — the actual
+// values are injected by paletteVars() below and switched via [data-theme].
+// Sub-components (Card, Button, Row, ...) read C.xxx exactly as before;
+// only the string it resolves to at render time changes with the theme.
+const C = Object.fromEntries(Object.keys(PALETTES.light).map((k) => [k, `var(--${k})`]));
+
+function paletteVars(palette) {
+  return Object.entries(palette)
+    .map(([k, v]) => `--${k}: ${v};`)
+    .join(" ");
+}
 
 const dateInput = {
   width: "100%",
   padding: "12px 14px",
   fontSize: 15,
-  border: "1px solid #D3D0C4",
+  border: `1px solid ${C.line}`,
   borderRadius: 3,
-  background: "#fff",
-  color: "#1B1D19",
+  background: C.card,
+  color: C.ink,
   boxSizing: "border-box",
 };
 
@@ -41,36 +42,11 @@ const F = {
 /*  Bryggdata och logik                                                */
 /* ------------------------------------------------------------------ */
 
+// Numbers only — the label/grind/hint text lives in i18n.js per language.
 const ROASTS = {
-  light: {
-    key: "light", label: "Ljusrost", tempMin: 96, tempMax: 97, temp: 97,
-    grind: "Medium-grov", t30: [240, 285], t45: [270, 315],
-    hint: "Blommigt och syrligt. Tål högst temperatur och längst tid.",
-  },
-  medium: {
-    key: "medium", label: "Mellanrost", tempMin: 94, tempMax: 95, temp: 95,
-    grind: "Medium-grov", t30: [225, 270], t45: [255, 300],
-    hint: "Balanserat. Mittfåran i både temperatur och tid.",
-  },
-  dark: {
-    key: "dark", label: "Mörkrost", tempMin: 92, tempMax: 93, temp: 93,
-    grind: "Lite grövre", t30: [210, 255], t45: [240, 285],
-    hint: "Choklad och rostade toner. Blir lätt besk — kortare tid, lägre värme.",
-  },
-};
-
-const TASTE = {
-  sour: "för surt",
-  bitter: "för beskt eller torrt",
-  weak: "för svagt",
-  strong: "för starkt",
-  balanced: "bra balanserat",
-};
-
-const FLOW = {
-  slow: "långsammare än målet",
-  fast: "snabbare än målet",
-  ok: "inom måltiden",
+  light: { key: "light", tempMin: 96, tempMax: 97, temp: 97, t30: [240, 285], t45: [270, 315] },
+  medium: { key: "medium", tempMin: 94, tempMax: 95, temp: 95, t30: [225, 270], t45: [255, 300] },
+  dark: { key: "dark", tempMin: 92, tempMax: 93, temp: 93, t30: [210, 255], t45: [240, 285] },
 };
 
 const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -101,11 +77,12 @@ function bloomSeconds(dose) {
   return clamp(Math.round((30 + (dose - 20) * 0.9) / 5) * 5, 30, 60);
 }
 
-function grindNote(roastKey, offset) {
-  const base = ROASTS[roastKey].grind;
+function grindNote(roastKey, offset, T) {
+  const base = T.roasts[roastKey].grind;
   if (offset === 0) return base;
   const steps = Math.abs(offset);
-  return `${base}, ${steps} steg ${offset > 0 ? "grövre" : "finare"}`;
+  const dir = offset > 0 ? T.next.coarser : T.next.finer;
+  return T.grindNote(base, steps, dir);
 }
 
 function doseFromCups(cups, ratio) {
@@ -148,8 +125,7 @@ function estimateRoastFromBestBefore(iso) {
   return d.toISOString().slice(0, 10);
 }
 
-const dayName = (n) => `${n} ${Math.abs(n) === 1 ? "dag" : "dagar"}`;
-const shortDate = (d) => d.toLocaleDateString("sv-SE", { day: "numeric", month: "short" });
+const shortDate = (d, T) => d.toLocaleDateString(T.locale, { day: "numeric", month: "short" });
 
 function addDays(iso, n) {
   const d = new Date(`${iso}T12:00:00`);
@@ -159,7 +135,7 @@ function addDays(iso, n) {
 
 /* Allt appen vet om påsens ålder, i ett objekt. Används både i setup och i
    receptet så att båda skärmarna säger exakt samma sak. */
-function ageProfile(roastKey, cfg) {
+function ageProfile(roastKey, cfg, T) {
   const stated = cfg.roastDate || null;
   const iso = stated || estimateRoastFromBestBefore(cfg.bestBefore);
   const days = daysSinceRoast(iso);
@@ -169,45 +145,29 @@ function ageProfile(roastKey, cfg) {
   const w = REST_WINDOWS[roastKey];
   const sweetFrom = addDays(iso, w.peak);
   const sweetTo = addDays(iso, w.fading - 1);
-  const sweet = `${shortDate(sweetFrom)} – ${shortDate(sweetTo)}`;
+  const sweet = `${shortDate(sweetFrom, T)} – ${shortDate(sweetTo, T)}`;
 
   const status =
     days < w.peak
-      ? `Som bäst om ${dayName(w.peak - days)}.`
+      ? T.rest.status.upcoming(T.rest.day(w.peak - days))
       : days < w.fading
-      ? `Som bäst nu — ${dayName(w.fading - days)} kvar av fönstret.`
-      : `Fönstret tog slut för ${dayName(days - w.fading + 1)} sedan.`;
+      ? T.rest.status.now(T.rest.day(w.fading - days))
+      : T.rest.status.past(T.rest.day(days - w.fading + 1));
 
-  const age = `${dayName(days)} efter rost`;
+  const age = T.rest.age(T.rest.day(days));
   const p =
     days < w.gassy
-      ? {
-          key: "fresh", bloomDelta: 20, tone: "warn", label: "För färskt",
-          note: `${age}. Bädden sväller kraftigt och stöter bort vattnet, så extraktionen blir ojämn och koppen smakar vassare än kaffet är. Bloomen förlängs för att kompensera.`,
-        }
+      ? { key: "fresh", bloomDelta: 20, tone: "warn", label: T.rest.label.fresh, note: T.rest.note.fresh(age) }
       : days < w.peak
-      ? {
-          key: "gassy", bloomDelta: 10, tone: "note", label: "Fortfarande gasigt",
-          note: `${age}. Fullt drickbart, men det finns CO₂ kvar. Bloomen förlängs så att gasen hinner ut innan huvudhällningarna.`,
-        }
+      ? { key: "gassy", bloomDelta: 10, tone: "note", label: T.rest.label.gassy, note: T.rest.note.gassy(age) }
       : days < w.fading
-      ? {
-          key: "peak", bloomDelta: 0, tone: "ok", label: "I fönstret",
-          note: `${age}, mitt i det bästa fönstret. Standardbloom. Det är nu kvarninställningen är värd att finkalibrera — vad som händer i koppen beror på dig och inte på kaffets ålder.`,
-        }
+      ? { key: "peak", bloomDelta: 0, tone: "ok", label: T.rest.label.peak, note: T.rest.note.peak(age) }
       : days < w.old
-      ? {
-          key: "fading", bloomDelta: -5, tone: "note", label: "På väg ut",
-          note: `${age}. Mindre CO₂ kvar ger en svagare bloom, så den kortas. Tappar koppen blommighet nu är det åldern som talar, inte receptet.`,
-        }
-      : {
-          key: "old", bloomDelta: -10, tone: "warn", label: "Förbi sin tid",
-          note: `${age}. Aromatiken har till stor del vittrat bort. Kortare bloom, men räkna inte med att någon justering väger upp det — spara hellre feedbacken till nästa påse.`,
-        };
+      ? { key: "fading", bloomDelta: -5, tone: "note", label: T.rest.label.fading, note: T.rest.note.fading(age) }
+      : { key: "old", bloomDelta: -10, tone: "warn", label: T.rest.label.old, note: T.rest.note.old(age) };
 
   /* Uppskattade datum får inte styra lika hårt som ett avläst rostdatum. */
   const bloomDelta = estimated ? clamp(p.bloomDelta, -5, 10) : p.bloomDelta;
-  const bbLeft = cfg.bestBefore ? -daysSinceRoast(cfg.bestBefore) : null;
 
   return {
     ...p,
@@ -218,13 +178,11 @@ function ageProfile(roastKey, cfg) {
     sweetFrom: sweetFrom.toISOString().slice(0, 10),
     status,
     expired: cfg.bestBefore ? new Date(`${cfg.bestBefore}T12:00:00`) < new Date() : false,
-    note: estimated
-      ? `${p.note} Åldern är uppskattad från bäst före-datumet med ${SHELF_MONTHS} månaders hållbarhet, så räkna med några veckors osäkerhet — justeringen är dämpad därefter.`
-      : p.note,
+    note: estimated ? `${p.note}${T.rest.estimatedSuffix(SHELF_MONTHS)}` : p.note,
   };
 }
 
-function buildRecipe(cfg) {
+function buildRecipe(cfg, T) {
   const roast = ROASTS[cfg.roast];
   const dose = cfg.dose;
   const water = Math.round(dose * cfg.ratio);
@@ -232,7 +190,7 @@ function buildRecipe(cfg) {
   const restWater = water - bloom;
   const [lo, hi] = timeWindow(cfg.roast, dose);
   const target = Math.round((lo + hi) / 2);
-  const rest = ageProfile(cfg.roast, cfg);
+  const rest = ageProfile(cfg.roast, cfg, T);
 
   /* Hällningarna ska vara klara efter ca 56 % av måltiden, så att resten
      räcker till avrinningen. Ger 0:40 / 1:35 / 2:30 för 30 g och
@@ -243,13 +201,13 @@ function buildRecipe(cfg) {
 
   return {
     roast: cfg.roast,
-    roastLabel: roast.label,
+    roastLabel: T.roasts[cfg.roast].label,
     dose,
     water,
     ratio: cfg.ratio,
     temperature: cfg.temperature,
     grindOffset: cfg.grindOffset,
-    grindNote: grindNote(cfg.roast, cfg.grindOffset),
+    grindNote: grindNote(cfg.roast, cfg.grindOffset, T),
     roastDate: cfg.roastDate || null,
     bestBefore: cfg.bestBefore || null,
     rest,
@@ -263,40 +221,37 @@ function buildRecipe(cfg) {
   };
 }
 
-function buildSteps(r) {
+function buildSteps(r, T) {
   return [
-    {
-      id: "rinse",
-      title: "Skölj filtret",
-      detail: "Vik filtret så att tre lager ligger mot pipen. Skölj igenom med hett vatten och häll ur sköljvattnet.",
-    },
+    { id: "rinse", title: T.steps.rinse.title, detail: T.steps.rinse.detail },
     {
       id: "grind",
-      title: "Mal och nolla vågen",
-      detail: `Mal ${r.dose} g på ${r.grindNote.toLowerCase()}. Jämna till bädden och nolla vågen. Vattnet ska hålla ${r.temperature} °C.`,
+      title: T.steps.grind.title,
+      detail: T.steps.grind.detail(r.dose, r.grindNote.toLowerCase(), r.temperature),
     },
     {
       id: "bloom",
-      title: "Bloom",
-      detail: `Häll till ${r.bloom} g så att allt kaffe blir blött. Rör om lätt och låt stå ${r.bloomSec} sekunder.`,
+      title: T.steps.bloom.title,
+      detail: T.steps.bloom.detail(r.bloom, r.bloomSec),
       target: r.bloom,
       at: 0,
     },
-    { id: "p1", title: "Hällning 1", detail: `Häll i spiral upp till ${r.pours[0]} g.`, target: r.pours[0], at: r.pourTimes[0] },
-    { id: "p2", title: "Hällning 2", detail: `Fyll på till ${r.pours[1]} g när nivån sjunkit.`, target: r.pours[1], at: r.pourTimes[1] },
-    { id: "p3", title: "Hällning 3", detail: `Sista hällningen, upp till ${r.pours[2]} g.`, target: r.pours[2], at: r.pourTimes[2] },
+    { id: "p1", title: T.steps.p1.title, detail: T.steps.p1.detail(r.pours[0]), target: r.pours[0], at: r.pourTimes[0] },
+    { id: "p2", title: T.steps.p2.title, detail: T.steps.p2.detail(r.pours[1]), target: r.pours[1], at: r.pourTimes[1] },
+    { id: "p3", title: T.steps.p3.title, detail: T.steps.p3.detail(r.pours[2]), target: r.pours[2], at: r.pourTimes[2] },
     {
       id: "drawdown",
-      title: "Låt rinna klart",
-      detail: `Måltid ${fmt(r.targetLo)}–${fmt(r.targetHi)}. Stoppa klockan när bädden är torrlagd och lyft filtret.`,
+      title: T.steps.drawdown.title,
+      detail: T.steps.drawdown.detail(fmt(r.targetLo), fmt(r.targetHi)),
       target: r.water,
     },
   ];
 }
 
 /* Regelmotorn: flödet styr malningen, smaken får temperatur och ratio. */
-function suggest(recipe, fb) {
+function suggest(recipe, fb, T) {
   const roast = ROASTS[recipe.roast];
+  const roastLabel = T.roasts[recipe.roast].label.toLowerCase();
   let grind = 0;
   let temperature = recipe.temperature;
   let ratio = recipe.ratio;
@@ -310,15 +265,15 @@ function suggest(recipe, fb) {
       const t = clamp(temperature + 1, roast.tempMin, roast.tempMax);
       if (t !== temperature) {
         temperature = t;
-        why.push(`Surt betyder underextraherat, men tiden drog över — därför grövre malning och en grad varmare vatten i stället.`);
+        why.push(T.suggest.sourGrindCoarserTempWarmer);
       } else {
-        why.push(`Surt betyder underextraherat. Malningen får ändå gå grövre eftersom tiden drog över, och ${temperature} °C är redan max för ${roast.label.toLowerCase()}.`);
+        why.push(T.suggest.sourGrindCoarserTempMaxed(temperature, roastLabel));
       }
     } else if (grind === -1) {
-      why.push("Finare malning fixar både den snabba tiden och surheten.");
+      why.push(T.suggest.sourAlreadyFiner);
     } else {
       grind = -1;
-      why.push("Surt betyder underextraherat. Finare malning ger mer utbyte.");
+      why.push(T.suggest.sourToFiner);
     }
   }
 
@@ -327,32 +282,32 @@ function suggest(recipe, fb) {
       const t = clamp(temperature - 2, roast.tempMin, roast.tempMax);
       if (t !== temperature) {
         temperature = t;
-        why.push("Beskt betyder överextraherat, men tiden var för kort — därför finare malning och svalare vatten.");
+        why.push(T.suggest.bitterGrindFinerTempCooler);
       } else {
-        why.push(`Beskt betyder överextraherat, men tiden var för kort. ${temperature} °C är redan lägst för ${roast.label.toLowerCase()}.`);
+        why.push(T.suggest.bitterGrindFinerTempMinned(temperature, roastLabel));
       }
     } else if (grind === 1) {
-      why.push("Grövre malning kortar både tiden och beskan.");
+      why.push(T.suggest.bitterAlreadyCoarser);
     } else {
       grind = 1;
-      why.push("Beskt betyder överextraherat. Grövre malning drar ur mindre.");
+      why.push(T.suggest.bitterToCoarser);
     }
   }
 
   if (fb.taste === "weak") {
     ratio = clamp(ratio - 1, 13, 19);
-    why.push(`Tunt kaffe är en fråga om styrka, inte extraktion. Starkare ratio 1:${ratio} ger mer kaffe per liter.`);
+    why.push(T.suggest.weak(ratio));
   }
 
   if (fb.taste === "strong") {
     ratio = clamp(ratio + 1, 13, 19);
-    why.push(`Svagare ratio 1:${ratio} tar ner styrkan utan att röra smakbilden.`);
+    why.push(T.suggest.strong(ratio));
   }
 
   if (fb.taste === "balanced" && grind === 0) {
-    why.push("Smaken satt och tiden höll. Kör exakt samma inställningar igen.");
+    why.push(T.suggest.balancedSame);
   } else if (fb.taste === "balanced") {
-    why.push("Smaken satt, så bara tiden justeras.");
+    why.push(T.suggest.balancedTimeOnly);
   }
 
   /* Rostdatumet får tolka feedbacken, inte styra siffrorna. Är kaffet för
@@ -365,21 +320,15 @@ function suggest(recipe, fb) {
       grind = 0;
       temperature = recipe.temperature;
       why.length = 0;
-      why.push(
-        `Tiden höll, men kaffet är bara ${rest.days} dagar från rost. Så här tidigt kommer surheten oftast från koldioxid som stöter bort vattnet under bloomen — delar av bädden hinner aldrig extraheras.`
-      );
-      why.push("Rör ingenting. Brygg samma recept om två–tre dagar och jämför: skiljer sig koppen åt var det kaffet, inte kvarnen.");
+      why.push(T.suggest.freshSourOkA(rest.days));
+      why.push(T.suggest.freshSourOkB);
     } else {
-      why.push(
-        `Med ${rest.days} dagar från rost kan en del av surheten vara CO₂ snarare än underextraktion. Justeringen ovan gäller tiden — vänta med att jaga smaken tills kaffet vilat ut.`
-      );
+      why.push(T.suggest.freshSourOther(rest.days));
     }
   }
 
   if (rest && (rest.key === "fading" || rest.key === "old") && (fb.taste === "weak" || fb.taste === "sour")) {
-    why.push(
-      `Kaffet är ${rest.days} dagar gammalt. Tunnhet och platta toner så här sent är bortvittrad aromatik, och receptet kan dölja det men inte lösa det.`
-    );
+    why.push(T.suggest.fadingOldWeakOrSour(rest.days));
   }
 
   return {
@@ -391,21 +340,21 @@ function suggest(recipe, fb) {
   };
 }
 
-function changeList(recipe, s) {
+function changeList(recipe, s, T) {
   const rows = [];
   rows.push({
-    label: "Malning",
-    value: s.grindStep === 0 ? "Oförändrad" : `1 steg ${s.grindStep > 0 ? "grövre" : "finare"}`,
+    label: T.recipe.grind,
+    value: s.grindStep === 0 ? T.next.unchanged : T.next.grindStep(s.grindStep > 0 ? T.next.coarser : T.next.finer),
     changed: s.grindStep !== 0,
   });
   rows.push({
-    label: "Temperatur",
-    value: s.temperature === recipe.temperature ? `${s.temperature} °C, oförändrad` : `${recipe.temperature} → ${s.temperature} °C`,
+    label: T.recipe.temperature,
+    value: s.temperature === recipe.temperature ? T.next.tempUnchanged(s.temperature) : `${recipe.temperature} → ${s.temperature} °C`,
     changed: s.temperature !== recipe.temperature,
   });
   rows.push({
-    label: "Ratio",
-    value: s.ratio === recipe.ratio ? `1:${s.ratio}, oförändrad` : `1:${recipe.ratio} → 1:${s.ratio}`,
+    label: T.setup.ratio,
+    value: s.ratio === recipe.ratio ? T.next.ratioUnchanged(s.ratio) : `1:${recipe.ratio} → 1:${s.ratio}`,
     changed: s.ratio !== recipe.ratio,
   });
   return rows;
@@ -539,6 +488,9 @@ function BrewGauge({ recipe, poured }) {
 
 export default function ChemexBrewCoach() {
   const user = useAuth();
+  const [theme, setTheme] = useTheme();
+  const [lang, setLang] = useLang();
+  const T = translations[lang];
   const [authError, setAuthError] = useState(null);
   const [screen, setScreen] = useState("home");
   const [loaded, setLoaded] = useState(false);
@@ -587,6 +539,16 @@ export default function ChemexBrewCoach() {
     }
   }, [running]);
 
+  /* Håll <html lang> och adressfältets temafärg i synk med valen ovan */
+  useEffect(() => {
+    document.documentElement.lang = lang;
+  }, [lang]);
+
+  useEffect(() => {
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute("content", PALETTES[theme].ink);
+  }, [theme]);
+
   const shell = {
     minHeight: "100vh",
     background: C.paper,
@@ -597,26 +559,61 @@ export default function ChemexBrewCoach() {
     justifyContent: "center",
   };
 
+  const styleTag = (
+    <style>{`
+      :root { ${paletteVars(PALETTES.light)} }
+      [data-theme="dark"] { ${paletteVars(PALETTES.dark)} }
+      .cbc-btn:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 2px; }
+      .cbc-btn:hover:not(:disabled) { filter: brightness(1.06); }
+      input, textarea { font-family: ${F.mono}; }
+      input:focus-visible, textarea:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 1px; }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+    `}</style>
+  );
+
+  const navBtnStyle = {
+    background: "none",
+    border: "none",
+    cursor: "pointer",
+    fontFamily: F.mono,
+    fontSize: 11,
+    letterSpacing: "0.12em",
+    textTransform: "uppercase",
+    color: C.ink2,
+  };
+
+  const langThemeToggles = (
+    <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, marginBottom: 12 }}>
+      <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
+        {T.lang[lang === "sv" ? "en" : "sv"]}
+      </button>
+      <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
+        {T.theme[theme === "light" ? "dark" : "light"]}
+      </button>
+    </div>
+  );
+
   if (user === undefined) {
     return (
-      <div style={shell}>
-        <div style={{ fontFamily: F.mono, fontSize: 13, color: C.ink3 }}>Loggar in …</div>
+      <div style={shell} data-theme={theme}>
+        {styleTag}
+        <div style={{ fontFamily: F.mono, fontSize: 13, color: C.ink3 }}>{T.loggingIn}</div>
       </div>
     );
   }
 
   if (user === null) {
     return (
-      <div style={shell}>
+      <div style={shell} data-theme={theme}>
+        {styleTag}
         <div style={{ width: "100%", maxWidth: 460 }}>
+          {langThemeToggles}
           <Card style={{ textAlign: "center", padding: "44px 24px" }}>
-            <div style={{ fontFamily: F.display, fontSize: 24, marginBottom: 8 }}>Chemex Brew Coach</div>
-            <div style={{ fontSize: 14, color: C.ink2, marginBottom: 26, lineHeight: 1.5 }}>
-              Logga in för att spara och synka dina bryggningar mellan enheter.
-            </div>
+            <div style={{ fontFamily: F.display, fontSize: 24, marginBottom: 8 }}>{T.appTitle}</div>
+            <div style={{ fontSize: 14, color: C.ink2, marginBottom: 26, lineHeight: 1.5 }}>{T.auth.prompt}</div>
             {authError && (
               <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 18, borderRadius: 3, textAlign: "left" }}>
-                Inloggningen misslyckades: {authError}
+                {T.auth.failed(authError)}
               </div>
             )}
             <Button
@@ -625,7 +622,7 @@ export default function ChemexBrewCoach() {
                 signInWithGoogle().catch((err) => setAuthError(err.message || String(err)));
               }}
             >
-              Logga in med Google
+              {T.auth.signIn}
             </Button>
           </Card>
         </div>
@@ -644,9 +641,9 @@ export default function ChemexBrewCoach() {
 
   function toRecipe() {
     const dose = cfg.inputMode === "dose" ? cfg.dose : doseFromCups(cfg.cups, cfg.ratio);
-    const r = buildRecipe({ ...cfg, dose });
+    const r = buildRecipe({ ...cfg, dose }, T);
     setRecipe(r);
-    setSteps(buildSteps(r));
+    setSteps(buildSteps(r, T));
     setScreen("recipe");
   }
 
@@ -672,7 +669,7 @@ export default function ChemexBrewCoach() {
   }
 
   async function saveFeedback() {
-    const s = suggest(recipe, fb);
+    const s = suggest(recipe, fb, T);
     const brew = {
       id: `${Date.now()}`,
       date: new Date().toISOString(),
@@ -705,14 +702,8 @@ export default function ChemexBrewCoach() {
   /* ------------------------------------------------------------------ */
 
   return (
-    <div style={shell}>
-      <style>{`
-        .cbc-btn:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 2px; }
-        .cbc-btn:hover:not(:disabled) { filter: brightness(1.06); }
-        input, textarea { font-family: ${F.mono}; }
-        input:focus-visible, textarea:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 1px; }
-        @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
-      `}</style>
+    <div style={shell} data-theme={theme}>
+      {styleTag}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
         {/* Sidhuvud */}
@@ -722,32 +713,29 @@ export default function ChemexBrewCoach() {
             onClick={() => setScreen("home")}
             style={{ background: "none", border: "none", padding: 0, cursor: "pointer", textAlign: "left" }}
           >
-            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em" }}>Chemex Brew Coach</div>
+            <div style={{ fontFamily: F.display, fontSize: 21, letterSpacing: "-0.01em" }}>{T.appTitle}</div>
           </button>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
             {brews.length > 0 && screen !== "history" && (
-              <button
-                className="cbc-btn"
-                onClick={() => setScreen("history")}
-                style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink2 }}
-              >
-                Historik ({brews.length})
+              <button className="cbc-btn" onClick={() => setScreen("history")} style={navBtnStyle}>
+                {T.history(brews.length)}
               </button>
             )}
-            <button
-              className="cbc-btn"
-              onClick={() => signOut()}
-              title={user.email || undefined}
-              style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, letterSpacing: "0.12em", textTransform: "uppercase", color: C.ink3 }}
-            >
-              Logga ut
+            <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
+              {T.lang[lang === "sv" ? "en" : "sv"]}
+            </button>
+            <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
+              {T.theme[theme === "light" ? "dark" : "light"]}
+            </button>
+            <button className="cbc-btn" onClick={() => signOut()} title={user.email || undefined} style={{ ...navBtnStyle, color: C.ink3 }}>
+              {T.signOut}
             </button>
           </div>
         </div>
 
         {saveFailed && (
           <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 14, borderRadius: 3 }}>
-            Bryggningen kunde inte sparas. Skriv ner inställningarna innan du stänger sidan.
+            {T.saveFailed}
           </div>
         )}
 
@@ -757,13 +745,13 @@ export default function ChemexBrewCoach() {
             <Card style={{ padding: 0, overflow: "hidden" }}>
               <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                 <div style={{ flex: 1 }}>
-                  <Eyebrow>{last ? "Senaste bryggningen" : "Ingen bryggning än"}</Eyebrow>
+                  <Eyebrow>{last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}</Eyebrow>
                   {last ? (
                     <>
                       <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
-                        {ROASTS[last.roast].label}
+                        {T.roasts[last.roast].label}
                         <br />
-                        blev {TASTE[last.feedback.taste]}
+                        {T.home.becamePrefix} {T.taste[last.feedback.taste]}
                       </div>
                       <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 12, lineHeight: 1.7 }}>
                         {last.coffeeDose} g · {last.water} g · 1:{last.ratio}
@@ -772,9 +760,7 @@ export default function ChemexBrewCoach() {
                       </div>
                     </>
                   ) : (
-                    <div style={{ fontFamily: F.display, fontSize: 25, lineHeight: 1.2, marginTop: 10 }}>
-                      Brygg en kopp. Nästa bygger på den.
-                    </div>
+                    <div style={{ fontFamily: F.display, fontSize: 25, lineHeight: 1.2, marginTop: 10 }}>{T.home.brewACup}</div>
                   )}
                 </div>
                 <div style={{ marginTop: -6, marginRight: -12 }}>
@@ -788,7 +774,11 @@ export default function ChemexBrewCoach() {
                 {last ? (
                   <>
                     <div style={{ fontSize: 14, lineHeight: 1.55, color: C.ink2, borderTop: `1px solid ${C.line}`, paddingTop: 14, marginBottom: 14 }}>
-                      Förslaget från förra gången: {grindNote(last.roast, last.suggestedNext.grindOffset).toLowerCase()}, {last.suggestedNext.temperature} °C, 1:{last.suggestedNext.ratio}.
+                      {T.home.lastSuggestion(
+                        grindNote(last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
+                        last.suggestedNext.temperature,
+                        last.suggestedNext.ratio
+                      )}
                     </div>
                     <Button
                       onClick={() =>
@@ -804,34 +794,34 @@ export default function ChemexBrewCoach() {
                         })
                       }
                     >
-                      Fortsätt från förra
+                      {T.home.continueFromLast}
                     </Button>
                     <div style={{ height: 8 }} />
                     <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: ROASTS[cfg.roast].temp })}>
-                      Ny bryggning från noll
+                      {T.home.newFromZero}
                     </Button>
                   </>
                 ) : (
-                  <Button onClick={() => openSetup({})}>Ny bryggning</Button>
+                  <Button onClick={() => openSetup({})}>{T.home.newBrew}</Button>
                 )}
               </div>
             </Card>
-            {!loaded && <div style={{ fontSize: 13, color: C.ink3, marginTop: 12 }}>Läser in sparade bryggningar …</div>}
+            {!loaded && <div style={{ fontSize: 13, color: C.ink3, marginTop: 12 }}>{T.home.loadingBrews}</div>}
           </div>
         )}
 
         {/* ---------------- Setup ---------------- */}
         {screen === "setup" && (
           <Card>
-            <Eyebrow>Steg 1 av 3 · Inställningar</Eyebrow>
-            <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 18px", fontWeight: 400 }}>Vad brygger du?</h2>
+            <Eyebrow>{T.setup.step}</Eyebrow>
+            <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 18px", fontWeight: 400 }}>{T.setup.heading}</h2>
 
-            <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>Rostnivå</div>
+            <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.setup.roastLevel}</div>
             {Object.values(ROASTS).map((r) => (
               <Choice
                 key={r.key}
-                label={r.label}
-                sub={r.hint}
+                label={T.roasts[r.key].label}
+                sub={T.roasts[r.key].hint}
                 selected={cfg.roast === r.key}
                 onClick={() =>
                   setCfg((c) => ({ ...c, roast: r.key, temperature: clamp(c.temperature, r.tempMin, r.tempMax) === c.temperature ? clamp(c.temperature, r.tempMin, r.tempMax) : r.temp }))
@@ -839,9 +829,9 @@ export default function ChemexBrewCoach() {
               />
             ))}
 
-            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>Mängd</div>
+            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.setup.amount}</div>
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              {[["dose", "Gram kaffe"], ["cups", "Antal koppar"]].map(([k, l]) => (
+              {[["dose", T.setup.gramsMode], ["cups", T.setup.cupsMode]].map(([k, l]) => (
                 <button
                   key={k}
                   className="cbc-btn"
@@ -867,35 +857,35 @@ export default function ChemexBrewCoach() {
               <>
                 <Stepper
                   value={cfg.dose}
-                  suffix="g kaffe"
+                  suffix={T.setup.gCoffeeSuffix}
                   min={12}
                   max={75}
                   step={1}
                   onChange={(v) => setCfg((c) => ({ ...c, dose: v }))}
+                  decreaseLabel={T.decrease}
+                  increaseLabel={T.increase}
                 />
                 {cfg.dose > 65 && (
-                  <div style={{ fontSize: 12.5, color: C.hot, marginTop: 8, lineHeight: 1.45 }}>
-                    Över 65 g blir kaffebädden djupare än 5 cm och extraktionen ojämn. Brygg hellre två omgångar.
-                  </div>
+                  <div style={{ fontSize: 12.5, color: C.hot, marginTop: 8, lineHeight: 1.45 }}>{T.setup.overDose}</div>
                 )}
               </>
             ) : (
               <>
                 <Stepper
                   value={cfg.cups}
-                  suffix={cfg.cups === 1 ? "kopp" : "koppar"}
+                  suffix={cfg.cups === 1 ? T.setup.cupSingular : T.setup.cupPlural}
                   min={1}
                   max={10}
                   step={1}
                   onChange={(v) => setCfg((c) => ({ ...c, cups: v }))}
+                  decreaseLabel={T.decrease}
+                  increaseLabel={T.increase}
                 />
-                <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8 }}>
-                  Ger {doseFromCups(cfg.cups, cfg.ratio)} g kaffe. En kopp räknas som ca 170 ml färdigt kaffe.
-                </div>
+                <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8 }}>{T.setup.yields(doseFromCups(cfg.cups, cfg.ratio))}</div>
               </>
             )}
 
-            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>Ratio</div>
+            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.setup.ratio}</div>
             <Stepper
               value={cfg.ratio}
               prefix="1:"
@@ -903,11 +893,13 @@ export default function ChemexBrewCoach() {
               max={19}
               step={1}
               onChange={(v) => setCfg((c) => ({ ...c, ratio: v }))}
+              decreaseLabel={T.decrease}
+              increaseLabel={T.increase}
             />
-            <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8 }}>Lägre siffra ger starkare kaffe. 1:16 är utgångsläget.</div>
+            <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8 }}>{T.setup.ratioHint}</div>
 
             <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>
-              Rostdatum <span style={{ color: C.ink3 }}>— valfritt</span>
+              {T.setup.roastDate} <span style={{ color: C.ink3 }}>{T.setup.optional}</span>
             </div>
             <input
               type="date"
@@ -917,7 +909,7 @@ export default function ChemexBrewCoach() {
               style={dateInput}
             />
             <div style={{ fontSize: 13, color: C.ink2, margin: "14px 0 8px" }}>
-              Bäst före <span style={{ color: C.ink3 }}>— valfritt</span>
+              {T.setup.bestBefore} <span style={{ color: C.ink3 }}>{T.setup.optional}</span>
             </div>
             <input
               type="date"
@@ -927,17 +919,15 @@ export default function ChemexBrewCoach() {
             />
 
             {(() => {
-              const p = ageProfile(cfg.roast, cfg);
-              if (!p)
-                return (
-                  <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 10, lineHeight: 1.45 }}>
-                    Rostdatum står på de flesta påsar och är det säkra valet. Saknas det räknar appen baklänges från bäst före-datumet i stället. Med något av dem får du anpassad bloomtid och besked om när påsen är som bäst.
-                  </div>
-                );
+              const p = ageProfile(cfg.roast, cfg, T);
+              if (!p) return <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 10, lineHeight: 1.45 }}>{T.setup.noDataHint}</div>;
               return (
                 <div style={{ marginTop: 14, border: `1px solid ${C.line}`, borderRadius: 3, overflow: "hidden" }}>
-                  <div style={{ background: "#fff", padding: "12px 14px", borderBottom: `1px solid ${C.line}` }}>
-                    <Eyebrow>Bäst att brygga{p.estimated ? " (uppskattat)" : ""}</Eyebrow>
+                  <div style={{ background: C.card, padding: "12px 14px", borderBottom: `1px solid ${C.line}` }}>
+                    <Eyebrow>
+                      {T.setup.bestToBrew}
+                      {p.estimated ? T.setup.estimatedSuffix : ""}
+                    </Eyebrow>
                     <div style={{ fontFamily: F.display, fontSize: 20, margin: "6px 0 2px" }}>{p.sweet}</div>
                     <div style={{ fontFamily: F.mono, fontSize: 12, color: p.key === "peak" ? C.ok : C.ink2 }}>{p.status}</div>
                   </div>
@@ -950,16 +940,16 @@ export default function ChemexBrewCoach() {
                     }}
                   >
                     <strong style={{ fontWeight: 600 }}>{p.label}.</strong> {p.note}
-                    {p.expired && " Bäst före-datumet har dessutom passerat."}
+                    {p.expired && T.setup.expiredSuffix}
                   </div>
                 </div>
               );
             })()}
 
             <div style={{ marginTop: 24 }}>
-              <Button onClick={toRecipe}>Visa receptet</Button>
+              <Button onClick={toRecipe}>{T.setup.showRecipe}</Button>
               <Button variant="plain" onClick={() => setScreen("home")} style={{ marginTop: 6 }}>
-                Tillbaka
+                {T.setup.back}
               </Button>
             </div>
           </Card>
@@ -968,43 +958,41 @@ export default function ChemexBrewCoach() {
         {/* ---------------- Receptöversikt ---------------- */}
         {screen === "recipe" && recipe && (
           <Card>
-            <Eyebrow>Steg 2 av 3 · Recept</Eyebrow>
+            <Eyebrow>{T.recipe.step}</Eyebrow>
             <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 4px", fontWeight: 400 }}>
               {recipe.roastLabel}, {recipe.dose} g
             </h2>
-            <div style={{ fontSize: 13.5, color: C.ink2, marginBottom: 16 }}>
-              Väg upp allt innan du börjar. Klockan startar när bloomen gör det.
-            </div>
+            <div style={{ fontSize: 13.5, color: C.ink2, marginBottom: 16 }}>{T.recipe.weighEverything}</div>
 
-            <Row label="Kaffe" value={`${recipe.dose} g`} />
-            <Row label="Vatten" value={`${recipe.water} g`} />
-            <Row label="Ratio" value={`1:${recipe.ratio}`} />
-            <Row label="Temperatur" value={`${recipe.temperature} °C`} accent={C.hot} />
-            <Row label="Malning" value={recipe.grindNote} />
+            <Row label={T.recipe.coffee} value={`${recipe.dose} g`} />
+            <Row label={T.recipe.water} value={`${recipe.water} g`} />
+            <Row label={T.setup.ratio} value={`1:${recipe.ratio}`} />
+            <Row label={T.recipe.temperature} value={`${recipe.temperature} °C`} accent={C.hot} />
+            <Row label={T.recipe.grind} value={recipe.grindNote} />
             <Row
-              label="Bloom"
+              label={T.recipe.bloom}
               value={`${recipe.bloom} g, ${recipe.bloomSec} s`}
               accent={recipe.rest && recipe.rest.bloomDelta !== 0 ? C.collar : undefined}
             />
             {recipe.rest && (
               <>
                 <Row
-                  label={recipe.rest.estimated ? "Ålder (uppskattad)" : "Vila efter rost"}
+                  label={recipe.rest.estimated ? T.recipe.ageEstimated : T.recipe.restAfterRoast}
                   value={`${recipe.rest.days} d — ${recipe.rest.label.toLowerCase()}`}
                   accent={recipe.rest.tone === "warn" ? C.hot : recipe.rest.tone === "ok" ? C.ok : C.ink}
                 />
-                <Row label="Bäst att brygga" value={recipe.rest.sweet} accent={recipe.rest.key === "peak" ? C.ok : C.ink3} />
+                <Row label={T.setup.bestToBrew} value={recipe.rest.sweet} accent={recipe.rest.key === "peak" ? C.ok : C.ink3} />
                 <div style={{ fontSize: 12.5, color: C.ink2, lineHeight: 1.5, marginTop: 10 }}>
                   {recipe.rest.note} {recipe.rest.status}
                 </div>
               </>
             )}
-            <Row label="Måltid" value={`${fmt(recipe.targetLo)}–${fmt(recipe.targetHi)}`} />
+            <Row label={T.recipe.targetTime} value={`${fmt(recipe.targetLo)}–${fmt(recipe.targetHi)}`} />
 
             <div style={{ marginTop: 22 }}>
-              <Button onClick={startBrew}>Starta bryggningen</Button>
+              <Button onClick={startBrew}>{T.recipe.startBrewing}</Button>
               <Button variant="plain" onClick={() => setScreen("setup")} style={{ marginTop: 6 }}>
-                Ändra inställningar
+                {T.recipe.changeSettings}
               </Button>
             </div>
           </Card>
@@ -1019,7 +1007,7 @@ export default function ChemexBrewCoach() {
                   <BrewGauge recipe={recipe} poured={poured} />
                 </div>
                 <div style={{ flex: 1, paddingTop: 4 }}>
-                  <Eyebrow>Klocka</Eyebrow>
+                  <Eyebrow>{T.brewScreen.clock}</Eyebrow>
                   <div
                     style={{
                       fontFamily: F.mono,
@@ -1034,11 +1022,11 @@ export default function ChemexBrewCoach() {
                     {fmt(elapsed)}
                   </div>
                   <div style={{ fontFamily: F.mono, fontSize: 12, color: C.ink3, marginTop: 2 }}>
-                    mål {fmt(recipe.targetLo)}–{fmt(recipe.targetHi)}
+                    {T.brewScreen.target} {fmt(recipe.targetLo)}–{fmt(recipe.targetHi)}
                   </div>
                   <div style={{ marginTop: 14 }}>
                     <Button variant="quiet" onClick={() => setRunning((r) => !r)} style={{ padding: "9px 0", fontSize: 13.5 }}>
-                      {running ? "Pausa klockan" : elapsed === 0 ? "Starta klockan" : "Fortsätt"}
+                      {running ? T.brewScreen.pause : elapsed === 0 ? T.brewScreen.start : T.brewScreen.continueLabel}
                     </Button>
                   </div>
                 </div>
@@ -1046,22 +1034,18 @@ export default function ChemexBrewCoach() {
             </Card>
 
             <Card>
-              <Eyebrow>
-                Steg {stepIndex + 1} av {steps.length}
-              </Eyebrow>
+              <Eyebrow>{T.brewScreen.step(stepIndex + 1, steps.length)}</Eyebrow>
               <h2 style={{ fontFamily: F.display, fontSize: 24, margin: "8px 0 6px", fontWeight: 400 }}>{steps[stepIndex].title}</h2>
               <p style={{ fontSize: 15, lineHeight: 1.55, color: C.ink2, margin: "0 0 14px" }}>{steps[stepIndex].detail}</p>
 
               {steps[stepIndex].target && (
                 <div style={{ borderTop: `1px solid ${C.line}`, borderBottom: `1px solid ${C.line}`, padding: "12px 0", marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: 13.5, color: C.ink2 }}>Häll till</span>
+                  <span style={{ fontSize: 13.5, color: C.ink2 }}>{T.brewScreen.pourTo}</span>
                   <span style={{ fontFamily: F.mono, fontSize: 28, fontVariantNumeric: "tabular-nums" }}>{steps[stepIndex].target} g</span>
                 </div>
               )}
 
-              <Button onClick={nextStep}>
-                {stepIndex === steps.length - 1 ? "Bryggningen är klar" : "Klart – nästa steg"}
-              </Button>
+              <Button onClick={nextStep}>{stepIndex === steps.length - 1 ? T.brewScreen.finished : T.brewScreen.nextStep}</Button>
 
               <div style={{ marginTop: 16 }}>
                 {steps.map((s, i) => (
@@ -1089,43 +1073,43 @@ export default function ChemexBrewCoach() {
         {/* ---------------- Feedback ---------------- */}
         {screen === "feedback" && recipe && (
           <Card>
-            <Eyebrow>Steg 3 av 3 · Efter bryggningen</Eyebrow>
-            <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 4px", fontWeight: 400 }}>Hur blev den?</h2>
+            <Eyebrow>{T.feedback.step}</Eyebrow>
+            <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 4px", fontWeight: 400 }}>{T.feedback.heading}</h2>
             <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginBottom: 18 }}>
-              {recipe.dose} g · 1:{recipe.ratio} · {recipe.temperature} °C · {fmt(actual)} mot mål {fmt(recipe.target)}
+              {T.feedback.meta(recipe.dose, recipe.ratio, recipe.temperature, fmt(actual), fmt(recipe.target))}
             </div>
 
-            <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>Smak</div>
-            {Object.entries(TASTE).map(([k, l]) => (
+            <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.feedback.taste}</div>
+            {Object.entries(T.taste).map(([k, l]) => (
               <Choice key={k} label={l[0].toUpperCase() + l.slice(1)} selected={fb.taste === k} onClick={() => setFb((f) => ({ ...f, taste: k }))} />
             ))}
 
-            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>Tid och flöde</div>
-            {Object.entries(FLOW).map(([k, l]) => (
+            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.timeAndFlow}</div>
+            {Object.entries(T.flow).map(([k, l]) => (
               <Choice
                 key={k}
-                label={k === "slow" ? "Gick långsamt" : k === "fast" ? "Gick snabbt" : "Bra tid"}
-                sub={`Klockan säger ${l}`}
+                label={k === "slow" ? T.feedback.wentSlow : k === "fast" ? T.feedback.wentFast : T.feedback.goodTime}
+                sub={T.feedback.clockSays(l)}
                 selected={fb.flow === k}
                 onClick={() => setFb((f) => ({ ...f, flow: k }))}
               />
             ))}
 
-            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>Anteckning, om du vill</div>
+            <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
             <textarea
               value={fb.comment}
               onChange={(e) => setFb((f) => ({ ...f, comment: e.target.value }))}
               rows={3}
-              placeholder="Nytt kaffe, kallt kök, hällde slarvigt …"
-              style={{ width: "100%", padding: 12, fontSize: 14, border: `1px solid ${C.line}`, borderRadius: 3, background: "#fff", color: C.ink, resize: "vertical", boxSizing: "border-box" }}
+              placeholder={T.feedback.notePlaceholder}
+              style={{ width: "100%", padding: 12, fontSize: 14, border: `1px solid ${C.line}`, borderRadius: 3, background: C.card, color: C.ink, resize: "vertical", boxSizing: "border-box" }}
             />
 
             <div style={{ marginTop: 20 }}>
               <Button onClick={saveFeedback} disabled={!fb.taste || !fb.flow}>
-                Spara och få nästa förslag
+                {T.feedback.save}
               </Button>
               {(!fb.taste || !fb.flow) && (
-                <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8, textAlign: "center" }}>Välj både smak och tid för att gå vidare.</div>
+                <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8, textAlign: "center" }}>{T.feedback.pickBoth}</div>
               )}
             </div>
           </Card>
@@ -1134,11 +1118,11 @@ export default function ChemexBrewCoach() {
         {/* ---------------- Nästa rekommendation ---------------- */}
         {screen === "next" && result && (
           <Card>
-            <Eyebrow>Nästa bryggning</Eyebrow>
+            <Eyebrow>{T.next.eyebrow}</Eyebrow>
             <h2 style={{ fontFamily: F.display, fontSize: 23, margin: "10px 0 12px", fontWeight: 400, lineHeight: 1.3 }}>
               {result.s.grindStep === 0 && result.s.temperature === result.recipe.temperature && result.s.ratio === result.recipe.ratio
-                ? "Ändra ingenting."
-                : "Så här justerar du."}
+                ? T.next.changeNothing
+                : T.next.howToAdjust}
             </h2>
 
             <div style={{ marginBottom: 16 }}>
@@ -1149,10 +1133,10 @@ export default function ChemexBrewCoach() {
               ))}
             </div>
 
-            {changeList(result.recipe, result.s).map((r) => (
+            {changeList(result.recipe, result.s, T).map((r) => (
               <Row key={r.label} label={r.label} value={r.value} accent={r.changed ? C.collar : C.ink3} />
             ))}
-            <Row label="Ny malning" value={grindNote(result.recipe.roast, result.s.grindOffset)} />
+            <Row label={T.next.newGrind} value={grindNote(result.recipe.roast, result.s.grindOffset, T)} />
 
             <div style={{ marginTop: 22 }}>
               <Button
@@ -1169,11 +1153,11 @@ export default function ChemexBrewCoach() {
                   })
                 }
               >
-                Använd förslaget
+                {T.next.useSuggestion}
               </Button>
               <div style={{ height: 8 }} />
               <Button variant="quiet" onClick={() => setScreen("home")}>
-                Klart för idag
+                {T.next.done}
               </Button>
             </div>
           </Card>
@@ -1183,38 +1167,36 @@ export default function ChemexBrewCoach() {
         {screen === "history" && (
           <div>
             <Card style={{ marginBottom: 12 }}>
-              <Eyebrow>Historik</Eyebrow>
-              <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>
-                {brews.length} {brews.length === 1 ? "bryggning" : "bryggningar"}
-              </h2>
+              <Eyebrow>{T.history.eyebrow}</Eyebrow>
+              <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 0", fontWeight: 400 }}>{T.history.count(brews.length)}</h2>
             </Card>
 
             {brews.map((b) => (
               <Card key={b.id} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
-                  <span style={{ fontSize: 15, fontWeight: 500 }}>{ROASTS[b.roast].label}</span>
+                  <span style={{ fontSize: 15, fontWeight: 500 }}>{T.roasts[b.roast].label}</span>
                   <span style={{ fontFamily: F.mono, fontSize: 11.5, color: C.ink3 }}>
-                    {new Date(b.date).toLocaleDateString("sv-SE", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
+                    {new Date(b.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}
                   </span>
                 </div>
                 <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 8, lineHeight: 1.7 }}>
                   {b.coffeeDose} g · {b.water} g · 1:{b.ratio} · {b.temperature} °C
                   <br />
-                  {b.grindNote} · {b.actualTime} mot mål {b.targetTime}
-                  {b.restDays != null ? ` · ${b.restDays} d efter rost` : ""}
+                  {b.grindNote} · {T.history.timing(b.actualTime, b.targetTime)}
+                  {b.restDays != null ? T.history.offRoastSuffix(b.restDays) : ""}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.ink, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>
-                  Blev {TASTE[b.feedback.taste]}, {FLOW[b.feedback.flow]}.
+                  {T.history.became} {T.taste[b.feedback.taste]}, {T.flow[b.feedback.flow]}.
                   {b.feedback.comment ? ` ”${b.feedback.comment}”` : ""}
                 </div>
                 <div style={{ fontSize: 13, color: C.ink2, marginTop: 6, lineHeight: 1.5 }}>
-                  Nästa: {grindNote(b.roast, b.suggestedNext.grindOffset).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                  {T.history.next} {grindNote(b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
                 </div>
               </Card>
             ))}
 
             <Button variant="quiet" onClick={() => setScreen("home")} style={{ marginTop: 6 }}>
-              Till startsidan
+              {T.history.toHome}
             </Button>
           </div>
         )}
@@ -1224,7 +1206,7 @@ export default function ChemexBrewCoach() {
 }
 
 /* Sifferväljare med tumvänliga knappar */
-function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "" }) {
+function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "", decreaseLabel = "Decrease", increaseLabel = "Increase" }) {
   const btn = {
     width: 46,
     height: 46,
@@ -1239,7 +1221,7 @@ function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "" }) 
   };
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-      <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - step, min, max))} aria-label="Minska">
+      <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value - step, min, max))} aria-label={decreaseLabel}>
         –
       </button>
       <div
@@ -1252,14 +1234,14 @@ function Stepper({ value, onChange, min, max, step, prefix = "", suffix = "" }) 
           border: `1px solid ${C.line}`,
           borderRadius: 3,
           padding: "9px 0",
-          background: "#fff",
+          background: C.card,
         }}
       >
         {prefix}
         {value}
         {suffix ? ` ${suffix}` : ""}
       </div>
-      <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + step, min, max))} aria-label="Öka">
+      <button className="cbc-btn" style={btn} onClick={() => onChange(clamp(value + step, min, max))} aria-label={increaseLabel}>
         +
       </button>
     </div>
