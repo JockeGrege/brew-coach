@@ -594,9 +594,19 @@ function BrewGauge({ methodKey, recipe, poured }) {
             fill={d.fillToken ? C[d.fillToken] : d.fill || "none"}
             stroke={d.stroke}
             strokeWidth={d.stroke ? d.strokeWidth || 1.2 : undefined}
+            strokeLinejoin="round"
           />
         ) : (
-          <line key={i} x1={d.line.x1} y1={d.line.y1} x2={d.line.x2} y2={d.line.y2} stroke={d.stroke} strokeWidth={d.strokeWidth || 1.2} />
+          <line
+            key={i}
+            x1={d.line.x1}
+            y1={d.line.y1}
+            x2={d.line.x2}
+            y2={d.line.y2}
+            stroke={d.stroke}
+            strokeWidth={d.strokeWidth || 1.2}
+            strokeLinecap="round"
+          />
         )
       )}
       {declutterMarks(marks, recipe.water, g.top, g.bottom).map((m) => (
