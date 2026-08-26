@@ -1115,7 +1115,7 @@ export default function ChemexBrewCoach() {
             </div>
           </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14}}>
               {methodSelect}
               <button
                 className="cbc-btn"
@@ -1123,8 +1123,8 @@ export default function ChemexBrewCoach() {
                 aria-label={T.sources.title}
                 title={T.sources.title}
                 style={{
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   borderRadius: "50%",
                   border: `1px solid ${C.line}`,
                   background: "transparent",
