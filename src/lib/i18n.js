@@ -218,6 +218,20 @@ const sv = {
         },
       },
     },
+    kalita: {
+      roastGrind: { light: "Medium", medium: "Medium", dark: "Lite grövre" },
+      overDose: "Över 35 g blir bädden för djup för filtret och extraktionen ojämn. Brygg hellre två omgångar.",
+      steps: {
+        rinse: {
+          title: "Skölj filtret",
+          detail: "Placera det vågiga filtret plant i bryggaren och skölj igenom med hett vatten för att värma bryggaren och ta bort pappenssmak. Häll ur sköljvattnet.",
+        },
+        drawdown: {
+          title: "Låt rinna klart",
+          detail: (lo, hi) => `Måltid ${lo}–${hi}. Stoppa klockan när bädden är torrlagd och lyft bryggaren.`,
+        },
+      },
+    },
   },
 
   suggest: {
@@ -498,6 +512,20 @@ const en = {
         drawdown: {
           title: "Let it drain",
           detail: (lo, hi) => `Target time ${lo}–${hi}. Stop the clock once the bed is dry and lift the dripper.`,
+        },
+      },
+    },
+    kalita: {
+      roastGrind: { light: "Medium", medium: "Medium", dark: "Slightly coarser" },
+      overDose: "Above 35 g the bed gets too deep for the filter and extraction turns uneven. Better to brew two batches instead.",
+      steps: {
+        rinse: {
+          title: "Rinse the filter",
+          detail: "Place the wave filter flat in the dripper and rinse with hot water to warm the brewer and remove the papery taste. Pour out the rinse water.",
+        },
+        drawdown: {
+          title: "Let it drain",
+          detail: (lo, hi) => `Target time ${lo}–${hi}. Stop the clock once the bed has drained and lift the brewer.`,
         },
       },
     },
