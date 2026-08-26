@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useRef } from "react";
 import { loadBrews, saveBrews } from "./lib/brews";
 import { useAuth } from "./lib/useAuth";
-import { signInWithGoogle, signOut } from "./lib/firebase";
+import { signInWithGoogle, continueAsGuest, linkGuestToGoogle, signOut } from "./lib/firebase";
 import { PALETTES, useTheme } from "./lib/theme";
 import { translations, useLang } from "./lib/i18n";
 import { METHODS, METHOD_ORDER } from "./lib/methods";
@@ -61,6 +61,20 @@ function grindNote(methodKey, roastKey, offset, T) {
 function doseFromCups(cups, ratio) {
   // ~170 ml färdigt kaffe per kopp. Bädden håller kvar ca 2 g vatten per g kaffe.
   return clamp(Math.round((cups * 170) / (ratio - 2)), 12, 90);
+}
+
+/* Firebase raderar tysta, inaktiva gästkonton efter GUEST_CLEANUP_DAYS dagar
+   (satt i Firebase Console — håll den här synkad med det värdet). Eftersom
+   raderingen är permanent och sker utan förvarning, varnar hemskärmen aktivt
+   den sista veckan innan den skulle inträffa, i stället för att bara nämna
+   "skapa ett konto" som en trevlig idé. */
+const GUEST_CLEANUP_DAYS = 30;
+const GUEST_CLEANUP_WARNING_DAYS = 7;
+
+function guestDaysLeft(creationTime) {
+  if (!creationTime) return null;
+  const days = Math.floor((Date.now() - new Date(creationTime).getTime()) / 86400000);
+  return GUEST_CLEANUP_DAYS - days;
 }
 
 /* --- Vila efter rost -------------------------------------------------
@@ -566,6 +580,14 @@ export default function ChemexBrewCoach() {
   const [method, setMethod] = useMethod();
   const activeMethod = METHODS[method];
   const [authError, setAuthError] = useState(null);
+  const [linkError, setLinkError] = useState(null);
+
+  function handleCreateAccount() {
+    setLinkError(null);
+    linkGuestToGoogle().catch((err) => {
+      setLinkError(err.code === "auth/credential-already-in-use" ? T.auth.credentialInUse : T.auth.linkFailed(err.message || String(err)));
+    });
+  }
   const [confirmAction, setConfirmAction] = useState(null);
   const [showSources, setShowSources] = useState(false);
   const [screen, setScreen] = useState("home");
@@ -934,6 +956,17 @@ export default function ChemexBrewCoach() {
             >
               {T.auth.signIn}
             </Button>
+            <div style={{ height: 8 }} />
+            <Button
+              variant="quiet"
+              onClick={() => {
+                setAuthError(null);
+                continueAsGuest().catch((err) => setAuthError(err.message || String(err)));
+              }}
+            >
+              {T.auth.continueAsGuest}
+            </Button>
+            <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 10, lineHeight: 1.4 }}>{T.auth.guestCaption}</div>
           </Card>
         </div>
       </div>
@@ -1114,8 +1147,9 @@ export default function ChemexBrewCoach() {
               className="cbc-btn"
               onClick={() =>
                 setConfirmAction({
-                  message: T.confirm.signOut,
+                  message: user.isAnonymous ? T.confirm.signOutGuest : T.confirm.signOut,
                   confirmLabel: T.signOut,
+                  danger: user.isAnonymous,
                   onConfirm: () => signOut(),
                 })
               }
@@ -1136,6 +1170,24 @@ export default function ChemexBrewCoach() {
         {/* ---------------- Startsida ---------------- */}
         {screen === "home" && (
           <div>
+            {user.isAnonymous &&
+              (() => {
+                const daysLeft = guestDaysLeft(user.metadata.creationTime);
+                const urgent = daysLeft !== null && daysLeft <= GUEST_CLEANUP_WARNING_DAYS;
+                return (
+                  <Card style={{ marginBottom: 12, borderColor: urgent ? C.hot : undefined }}>
+                    <div style={{ fontSize: 13.5, lineHeight: 1.5, color: urgent ? C.hot : C.ink2, marginBottom: 12 }}>
+                      {urgent ? T.auth.guestCleanupWarning(Math.max(daysLeft, 0)) : T.auth.guestHint}
+                    </div>
+                    {linkError && (
+                      <div style={{ border: `1px solid ${C.hot}`, color: C.hot, padding: "10px 12px", fontSize: 13, marginBottom: 12, borderRadius: 3 }}>
+                        {linkError}
+                      </div>
+                    )}
+                    <Button onClick={handleCreateAccount}>{T.auth.createAccount}</Button>
+                  </Card>
+                );
+              })()}
             {inProgress && (
               <Card style={{ padding: 0, overflow: "hidden", marginBottom: 12, position: "relative" }}>
                 <button
