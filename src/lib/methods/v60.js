@@ -59,25 +59,26 @@ export const v60 = {
     height: 172,
     // Bryggnivån visas i servern (karaffen) längst ner, precis som i
     // verkligheten — kaffet droppar genom tratten och samlas där.
-    top: 92,
-    bottom: 156,
-    glassPath: "M42,92 L62,92 L78,148 C78,153 74,156 69,156 L35,156 C30,156 26,153 26,148 Z",
+    top: 96,
+    bottom: 158,
+    glassPath: "M34,96 L74,96 L84,150 C84,155 79,158 74,158 L34,158 C29,158 24,155 24,150 Z",
     // Marken flyttas ut lite extra åt höger jämfört med Chemex, så de inte
     // kolliderar med handtaget på karaffen.
-    marksX: { tick1: 100, tick2: 112, label: 116 },
+    marksX: { tick1: 102, tick2: 114, label: 118 },
     decor: [
-      // Den bruna bandkanten längst upp på tratten.
-      { path: "M15,16 L89,16 L83,24 L21,24 Z", fillToken: "collar" },
-      // Själva tratten: bred kant som smalnar av mot det enda, centrerade hålet.
-      { path: "M21,24 L83,24 L60,84 L44,84 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Den ljusa kanten längst upp på tratten.
+      { path: "M14,12 L92,12 L86,20 L20,20 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Själva tratten: bred kant som smalnar av mot det enda, centrerade
+      // hålet — ett tydligt spetsigt V, till skillnad från Kalitas platta botten.
+      { path: "M20,20 L86,20 L58,90 L48,90 Z", fill: "#FFFFFF", stroke: "#39362C" },
       // Spiralribborna, antydda som tre linjer som viftar ut mot kanten.
-      { line: { x1: 52, y1: 28, x2: 52, y2: 82 }, stroke: "#39362C" },
-      { line: { x1: 32, y1: 32, x2: 46, y2: 82 }, stroke: "#39362C" },
-      { line: { x1: 72, y1: 32, x2: 58, y2: 82 }, stroke: "#39362C" },
+      { line: { x1: 53, y1: 24, x2: 53, y2: 88 }, stroke: "#39362C" },
+      { line: { x1: 32, y1: 28, x2: 49, y2: 88 }, stroke: "#39362C" },
+      { line: { x1: 74, y1: 28, x2: 57, y2: 88 }, stroke: "#39362C" },
       // Bandet där tratten möter karaffen.
-      { path: "M42,84 L62,84 L62,92 L42,92 Z", fillToken: "collar" },
-      // Handtaget på karaffen.
-      { path: "M78,130 C92,128 92,154 78,152", stroke: "#39362C", strokeWidth: 2.5 },
+      { path: "M46,90 L60,90 L60,96 L46,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Handtaget på karaffen — en sluten ögla fäst i karaffens sida.
+      { path: "M84,116 C104,116 104,146 84,146", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };
