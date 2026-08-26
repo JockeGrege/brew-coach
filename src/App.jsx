@@ -1090,8 +1090,11 @@ export default function ChemexBrewCoach() {
       )}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
-        {/* Sidhuvud */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
+        {/* Sidhuvud — titelraden och menyraden staplas var för sig så att
+            menyns radbrytning bara beror på sitt eget innehåll (samma på
+            varje skärm), aldrig på hur brett den aktuella metodens namn
+            råkar vara. */}
+        <div style={{ marginBottom: 20 }}>
           <div>
             <button
               className="cbc-btn"
@@ -1102,7 +1105,7 @@ export default function ChemexBrewCoach() {
                 {activeMethod.label} {T.brandSuffix}
               </div>
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
               {methodSelect}
               <button
                 className="cbc-btn"
@@ -1131,7 +1134,7 @@ export default function ChemexBrewCoach() {
               </button>
             </div>
           </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end", marginTop: 12 }}>
             {methodBrews.length > 0 && screen !== "history" && (
               <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
                 {T.historyNav(methodBrews.length)}
