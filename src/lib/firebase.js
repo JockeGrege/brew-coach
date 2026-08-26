@@ -3,6 +3,8 @@ import {
   getAuth,
   GoogleAuthProvider,
   signInWithPopup,
+  signInAnonymously,
+  linkWithPopup,
   signOut as firebaseSignOut,
   onAuthStateChanged,
 } from "firebase/auth";
@@ -29,6 +31,17 @@ const googleProvider = new GoogleAuthProvider();
 // protection) partition or clear, breaking it. Popup avoids that hop chain.
 export function signInWithGoogle() {
   return signInWithPopup(auth, googleProvider);
+}
+
+export function continueAsGuest() {
+  return signInAnonymously(auth);
+}
+
+// Upgrades an anonymous guest session to a real Google account, keeping the
+// same uid (and therefore the same Firestore brews) instead of switching to
+// a separate one the way a plain signInWithGoogle() would.
+export function linkGuestToGoogle() {
+  return linkWithPopup(auth.currentUser, googleProvider);
 }
 
 export function signOut() {

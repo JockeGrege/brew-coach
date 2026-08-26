@@ -14,6 +14,13 @@ const sv = {
     prompt: "Logga in för att spara och synka dina bryggningar mellan enheter.",
     failed: (msg) => `Inloggningen misslyckades: ${msg}`,
     signIn: "Logga in med Google",
+    continueAsGuest: "Fortsätt utan konto",
+    guestCaption: "Du kan skapa ett konto senare utan att förlora något.",
+    guestHint: "Du bryggar som gäst. Skapa ett konto för att spara din historik permanent.",
+    guestCleanupWarning: (n) => `Ditt gästkonto raderas om ${n} ${n === 1 ? "dag" : "dagar"} om du inte skapar ett konto.`,
+    createAccount: "Skapa konto",
+    linkFailed: (msg) => `Det gick inte att skapa kontot: ${msg}`,
+    credentialInUse: "Det här Google-kontot har redan en profil. Logga ut och logga in normalt istället.",
   },
 
   home: {
@@ -128,6 +135,7 @@ const sv = {
   confirm: {
     cancel: "Avbryt",
     signOut: "Är du säker på att du vill logga ut?",
+    signOutGuest: "Är du säker på att du vill logga ut? Som gäst kan du inte logga in igen på det här kontot senare — historiken försvinner.",
     clearAll: (n) => `Radera alla ${n} bryggningar? Det går inte att ångra.`,
     removeOne: "Ta bort den här bryggningen? Det går inte att ångra.",
     abortBrew: "Vill du avbryta den pågående bryggningen? Framstegen sparas inte.",
@@ -284,6 +292,13 @@ const en = {
     prompt: "Sign in to save and sync your brews across devices.",
     failed: (msg) => `Sign-in failed: ${msg}`,
     signIn: "Sign in with Google",
+    continueAsGuest: "Continue without an account",
+    guestCaption: "You can create an account later without losing anything.",
+    guestHint: "You're brewing as a guest. Create an account to save your history permanently.",
+    guestCleanupWarning: (n) => `Your guest account will be deleted in ${n} ${n === 1 ? "day" : "days"} unless you create an account.`,
+    createAccount: "Create account",
+    linkFailed: (msg) => `Couldn't create the account: ${msg}`,
+    credentialInUse: "This Google account already has a profile. Sign out and sign in normally instead.",
   },
 
   home: {
@@ -398,6 +413,7 @@ const en = {
   confirm: {
     cancel: "Cancel",
     signOut: "Are you sure you want to sign out?",
+    signOutGuest: "Are you sure you want to sign out? As a guest, you won't be able to sign back into this account later — your history will be gone.",
     clearAll: (n) => `Delete all ${n} brews? This can't be undone.`,
     removeOne: "Remove this brew? This can't be undone.",
     abortBrew: "Abort the brew in progress? Your progress won't be saved.",
