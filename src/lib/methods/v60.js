@@ -68,9 +68,8 @@ export const v60 = {
     decor: [
       // Den ljusa kanten längst upp på tratten.
       { path: "M14,12 L92,12 L86,20 L20,20 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      // Själva tratten: bred kant som smalnar av mot ett brett hål — inte
-      // lika spetsig som en riktig V60, men tydligt smalare än Kalitas
-      // platta botten.
+      // Det lilla, böjda greppet på tratten, som på en riktig V60.
+      { path: "M84,27 C110,27 112,53 74,53", fill: "none", stroke: "#39362C", strokeWidth: 2 },
       { path: "M20,20 L86,20 L62,88 L44,88 Z", fill: "#FFFFFF", stroke: "#39362C" },
       // Spiralribborna, antydda som tre linjer som viftar ut mot kanten.
       { line: { x1: 53, y1: 24, x2: 53, y2: 86 }, stroke: "#39362C" },
@@ -80,7 +79,7 @@ export const v60 = {
       { path: "M42,88 L64,88 L66,96 L40,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
       // Handtaget på karaffen — fäst direkt i karaffens kant, utan luft
       // emellan.
-      { path: "M78,114 C100,114 100,148 82,148", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
+      { path: "M76,110 C100,114 100,130 82,140", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };

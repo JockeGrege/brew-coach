@@ -64,8 +64,9 @@ export const kalita = {
       // Den platta skivan tratten vilar i, bredare än både tratt och karaff
       // — och dess underkant möter karaffens topp direkt, utan luft emellan.
       { path: "M14,96 C14,92 94,92 94,96 C94,100 14,100 14,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      // Handtaget på karaffen — en sluten ögla fäst i karaffens sida.
-      { path: "M86,116 C106,116 106,144 86,144", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
+      // Handtaget på karaffen — fäst direkt i karaffens kant, utan luft
+      // emellan.
+      { path: "M80,116 C102,116 102,144 80,144", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };
