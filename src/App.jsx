@@ -1090,9 +1090,12 @@ export default function ChemexBrewCoach() {
       )}
 
       <div style={{ width: "100%", maxWidth: 460 }}>
-        {/* Sidhuvud */}
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 20 }}>
-          <div>
+        {/* Sidhuvud — en fast 2×2-indelning (titel/dropdown till vänster,
+            snabbval/kontoåtgärder till höger på samma två rader) i stället
+            för flytande radbrytning, så layouten alltid ser likadan ut
+            oavsett hur bred den aktuella metodens namn råkar vara. */}
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
               className="cbc-btn"
               onClick={goHome}
@@ -1102,7 +1105,17 @@ export default function ChemexBrewCoach() {
                 {activeMethod.label} {T.brandSuffix}
               </div>
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
+                {T.lang[lang === "sv" ? "en" : "sv"]}
+              </button>
+              <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
+                {T.theme[theme === "light" ? "dark" : "light"]}
+              </button>
+            </div>
+          </div>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 14}}>
               {methodSelect}
               <button
                 className="cbc-btn"
@@ -1110,9 +1123,8 @@ export default function ChemexBrewCoach() {
                 aria-label={T.sources.title}
                 title={T.sources.title}
                 style={{
-                  marginTop: 4,
-                  width: 22,
-                  height: 22,
+                  width: 20,
+                  height: 20,
                   borderRadius: "50%",
                   border: `1px solid ${C.line}`,
                   background: "transparent",
@@ -1130,34 +1142,28 @@ export default function ChemexBrewCoach() {
                 i
               </button>
             </div>
-          </div>
-          <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            {methodBrews.length > 0 && screen !== "history" && (
-              <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
-                {T.historyNav(methodBrews.length)}
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+              {methodBrews.length > 0 && screen !== "history" && (
+                <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
+                  {T.historyNav(methodBrews.length)}
+                </button>
+              )}
+              <button
+                className="cbc-btn"
+                onClick={() =>
+                  setConfirmAction({
+                    message: user.isAnonymous ? T.confirm.signOutGuest : T.confirm.signOut,
+                    confirmLabel: T.signOut,
+                    danger: user.isAnonymous,
+                    onConfirm: () => signOut(),
+                  })
+                }
+                title={user.email || undefined}
+                style={{ ...navBtnStyle, color: C.ink3 }}
+              >
+                {T.signOut}
               </button>
-            )}
-            <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
-              {T.lang[lang === "sv" ? "en" : "sv"]}
-            </button>
-            <button className="cbc-btn" onClick={() => setTheme(theme === "light" ? "dark" : "light")} style={navBtnStyle}>
-              {T.theme[theme === "light" ? "dark" : "light"]}
-            </button>
-            <button
-              className="cbc-btn"
-              onClick={() =>
-                setConfirmAction({
-                  message: user.isAnonymous ? T.confirm.signOutGuest : T.confirm.signOut,
-                  confirmLabel: T.signOut,
-                  danger: user.isAnonymous,
-                  onConfirm: () => signOut(),
-                })
-              }
-              title={user.email || undefined}
-              style={{ ...navBtnStyle, color: C.ink3 }}
-            >
-              {T.signOut}
-            </button>
+            </div>
           </div>
         </div>
 
