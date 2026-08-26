@@ -6,6 +6,7 @@ import { PALETTES, useTheme } from "./lib/theme";
 import { translations, useLang } from "./lib/i18n";
 import { METHODS, METHOD_ORDER } from "./lib/methods";
 import { useMethod } from "./lib/method";
+import { useAutoAdvance } from "./lib/autoAdvance";
 import { pourTimes, timeWindow } from "./lib/methods/shared";
 import { loadInProgress, saveInProgress, clearInProgress } from "./lib/inProgress";
 
@@ -368,7 +369,7 @@ function Card({ children, style }) {
   );
 }
 
-function Button({ children, onClick, variant = "primary", disabled, style }) {
+function Button({ children, onClick, variant = "primary", disabled, style, className = "" }) {
   const base = {
     fontFamily: F.ui,
     fontSize: 15,
@@ -387,8 +388,50 @@ function Button({ children, onClick, variant = "primary", disabled, style }) {
     danger: { background: C.hot, color: C.card, border: `1px solid ${C.hot}` },
   };
   return (
-    <button className="cbc-btn" onClick={disabled ? undefined : onClick} disabled={disabled} style={{ ...base, ...skins[variant], ...style }}>
+    <button
+      className={`cbc-btn ${className}`.trim()}
+      onClick={disabled ? undefined : onClick}
+      disabled={disabled}
+      style={{ ...base, ...skins[variant], ...style }}
+    >
       {children}
+    </button>
+  );
+}
+
+function Toggle({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      onClick={onChange}
+      className="cbc-btn"
+      style={{
+        flexShrink: 0,
+        width: 44,
+        height: 26,
+        borderRadius: 13,
+        border: `1px solid ${checked ? C.ink : C.line}`,
+        background: checked ? C.ink : "transparent",
+        position: "relative",
+        cursor: "pointer",
+        padding: 0,
+        transition: "background 120ms ease, border-color 120ms ease",
+      }}
+    >
+      <span
+        style={{
+          position: "absolute",
+          top: 2,
+          left: checked ? 21 : 2,
+          width: 20,
+          height: 20,
+          borderRadius: "50%",
+          background: checked ? C.card : C.ink3,
+          transition: "left 120ms ease",
+        }}
+      />
     </button>
   );
 }
@@ -696,6 +739,10 @@ export default function ChemexBrewCoach() {
   const [actual, setActual] = useState(0);
   const [result, setResult] = useState(null);
   const tick = useRef(null);
+  const [autoAdvance, setAutoAdvance] = useAutoAdvance();
+  const [autoAdvancePending, setAutoAdvancePending] = useState(false);
+  const autoAdvanceTimer = useRef(null);
+  const autoAdvanceFiredFor = useRef(-1);
 
   // The brew currently underway for this method, if any — past Setup, with
   // a built recipe. Kept in sync with localStorage (see the effect below)
@@ -833,6 +880,43 @@ export default function ChemexBrewCoach() {
     }
   }, [running]);
 
+  // Resets whenever the step changes, whether that happened manually or via
+  // the auto-advance timer below, so each step gets its own fresh countdown.
+  useEffect(() => {
+    autoAdvanceFiredFor.current = -1;
+    setAutoAdvancePending(false);
+    if (autoAdvanceTimer.current) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
+  }, [stepIndex]);
+
+  // Pausing the clock cancels a pending auto-advance rather than letting it
+  // fire while the brewer isn't actually watching the timer.
+  useEffect(() => {
+    if (!running && autoAdvanceTimer.current) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+      autoAdvanceFiredFor.current = -1;
+      setAutoAdvancePending(false);
+    }
+  }, [running]);
+
+  useEffect(() => {
+    if (!running || !autoAdvance || screen !== "brew") return;
+    const nextAt = steps[stepIndex + 1]?.at;
+    if (nextAt === undefined) return;
+    if (elapsed < nextAt) return;
+    if (autoAdvanceFiredFor.current === stepIndex) return;
+    autoAdvanceFiredFor.current = stepIndex;
+    setAutoAdvancePending(true);
+    autoAdvanceTimer.current = setTimeout(() => {
+      autoAdvanceTimer.current = null;
+      setAutoAdvancePending(false);
+      nextStep();
+    }, 0);
+  }, [elapsed, running, autoAdvance, stepIndex, steps, screen]);
+
   /* Håll <html lang>, bläddarfliken och adressfältets temafärg i synk med valen ovan */
   useEffect(() => {
     document.documentElement.lang = lang;
@@ -872,7 +956,9 @@ export default function ChemexBrewCoach() {
       .cbc-btn:hover:not(:disabled) { filter: brightness(1.06); }
       input, textarea { font-family: ${F.mono}; }
       input:focus-visible, textarea:focus-visible { outline: 2px solid ${C.collar}; outline-offset: 1px; }
-      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+      @keyframes cbc-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.55; } }
+      .cbc-pulse { animation: cbc-pulse 900ms ease-in-out infinite; }
+      @media (prefers-reduced-motion: reduce) { * { transition: none !important; } .cbc-pulse { animation: none !important; } }
     `}</style>
   );
 
@@ -1004,6 +1090,12 @@ export default function ChemexBrewCoach() {
     setStepIndex(0);
     setElapsed(0);
     setRunning(false);
+    autoAdvanceFiredFor.current = -1;
+    setAutoAdvancePending(false);
+    if (autoAdvanceTimer.current) {
+      clearTimeout(autoAdvanceTimer.current);
+      autoAdvanceTimer.current = null;
+    }
     goTo("brew");
   }
 
@@ -1054,6 +1146,19 @@ export default function ChemexBrewCoach() {
     const done = steps.slice(0, stepIndex).filter((s) => s.target);
     return done.length ? done[done.length - 1].target : 0;
   })();
+
+  // When the current step has a known target time (the point the next step
+  // should begin), the clock warns as that moment approaches: orange inside
+  // 10s, red once it's passed. Untimed steps (rinse, grind, drawdown) keep
+  // the plain ink color.
+  const nextStepAt = steps[stepIndex + 1]?.at;
+  const timeToNextStep = nextStepAt !== undefined ? nextStepAt - elapsed : null;
+  const clockColor =
+    (recipe && elapsed > recipe.targetHi) || (timeToNextStep !== null && timeToNextStep <= 0)
+      ? C.hot
+      : timeToNextStep !== null && timeToNextStep <= 10
+      ? C.warn
+      : C.ink;
 
   const inProgressPoured = (() => {
     if (!inProgress) return 0;
@@ -1540,7 +1645,7 @@ export default function ChemexBrewCoach() {
                       letterSpacing: "-0.02em",
                       lineHeight: 1.1,
                       marginTop: 4,
-                      color: elapsed > recipe.targetHi ? C.hot : C.ink,
+                      color: clockColor,
                     }}
                   >
                     {fmt(elapsed)}
@@ -1548,14 +1653,36 @@ export default function ChemexBrewCoach() {
                   <div style={{ fontFamily: F.mono, fontSize: 12, color: C.ink3, marginTop: 2 }}>
                     {T.brewScreen.target} {fmt(recipe.targetLo)}–{fmt(recipe.targetHi)}
                   </div>
-                  <div style={{ marginTop: 14 }}>
-                    <Button variant="quiet" onClick={() => setRunning((r) => !r)} style={{ padding: "9px 0", fontSize: 13.5 }}>
-                      {running ? T.brewScreen.pause : elapsed === 0 ? T.brewScreen.start : T.brewScreen.continueLabel}
-                    </Button>
-                  </div>
+                  {nextStepAt !== undefined && (
+                    <div style={{ fontFamily: F.mono, fontSize: 12, color: C.ink3, marginTop: 2 }}>
+                      {T.brewScreen.nextAt}{" "}
+                      <span style={{ fontSize: 14, fontWeight: 600, color: clockColor === C.ink ? C.ink : clockColor }}>
+                        {fmt(nextStepAt)}
+                      </span>
+                    </div>
+                  )}
+                  {steps[stepIndex].id !== "rinse" && steps[stepIndex].id !== "grind" && (
+                    <div style={{ marginTop: 14 }}>
+                      <Button variant="quiet" onClick={() => setRunning((r) => !r)} style={{ padding: "9px 0", fontSize: 13.5 }}>
+                        {running ? T.brewScreen.pause : elapsed === 0 ? T.brewScreen.start : T.brewScreen.continueLabel}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </Card>
+
+            {!running && elapsed === 0 && (
+              <Card style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14.5, fontWeight: 500 }}>{T.brewScreen.autoAdvance}</div>
+                    <div style={{ fontSize: 12.5, color: C.ink2, marginTop: 2 }}>{T.brewScreen.autoAdvanceHint}</div>
+                  </div>
+                  <Toggle checked={autoAdvance} onChange={() => setAutoAdvance((a) => !a)} />
+                </div>
+              </Card>
+            )}
 
             <Card>
               <Eyebrow>{T.brewScreen.step(stepIndex + 1, steps.length)}</Eyebrow>
@@ -1569,7 +1696,15 @@ export default function ChemexBrewCoach() {
                 </div>
               )}
 
-              <Button onClick={nextStep}>{stepIndex === steps.length - 1 ? T.brewScreen.finished : T.brewScreen.nextStep}</Button>
+              <Button onClick={nextStep} className={autoAdvancePending ? "cbc-pulse" : ""}>
+                {autoAdvancePending
+                  ? T.brewScreen.advancingSoon
+                  : stepIndex === steps.length - 1
+                  ? T.brewScreen.finished
+                  : steps[stepIndex].id === "grind"
+                  ? T.brewScreen.nextStepStartClock
+                  : T.brewScreen.nextStep}
+              </Button>
 
               <div style={{ marginTop: 16 }}>
                 {steps.map((s, i) => (
