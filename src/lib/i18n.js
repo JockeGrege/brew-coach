@@ -16,7 +16,7 @@ const sv = {
     signIn: "Logga in med Google",
     continueAsGuest: "Fortsätt utan konto",
     guestCaption: "Du kan skapa ett konto senare utan att förlora något.",
-    guestHint: "Du bryggar som gäst. Skapa ett konto för att spara din historik permanent.",
+    guestHint: "Du brygger som gäst. Skapa ett konto för att spara din historik permanent.",
     guestCleanupWarning: (n) => `Ditt gästkonto raderas om ${n} ${n === 1 ? "dag" : "dagar"} om du inte skapar ett konto.`,
     createAccount: "Skapa konto",
     linkFailed: (msg) => `Det gick inte att skapa kontot: ${msg}`,
@@ -273,7 +273,7 @@ const sv = {
   chooseMethod: "Bryggmetod",
   sources: {
     title: "Källor",
-    intro: (methodLabel) => `Siffrorna för ${methodLabel} — ratio, malning, temperatur, bloom och tider — är hämtade från de här bryggguiderna.`,
+    intro: (methodLabel) => `Siffrorna för ${methodLabel} — ratio, malning, temperatur, bloom och tider — är hämtade från de här brygg guiderna.`,
     close: "Stäng",
   },
 };
