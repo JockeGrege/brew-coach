@@ -1095,7 +1095,7 @@ export default function ChemexBrewCoach() {
             för flytande radbrytning, så layouten alltid ser likadan ut
             oavsett hur bred den aktuella metodens namn råkar vara. */}
         <div style={{ marginBottom: 20 }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <button
               className="cbc-btn"
               onClick={goHome}
@@ -1105,7 +1105,7 @@ export default function ChemexBrewCoach() {
                 {activeMethod.label} {T.brandSuffix}
               </div>
             </button>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
               <button className="cbc-btn" onClick={() => setLang(lang === "sv" ? "en" : "sv")} style={navBtnStyle}>
                 {T.lang[lang === "sv" ? "en" : "sv"]}
               </button>
@@ -1142,7 +1142,7 @@ export default function ChemexBrewCoach() {
                 i
               </button>
             </div>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 12, flexShrink: 0 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
               {methodBrews.length > 0 && screen !== "history" && (
                 <button className="cbc-btn" onClick={() => goTo("history")} style={navBtnStyle}>
                   {T.historyNav(methodBrews.length)}
