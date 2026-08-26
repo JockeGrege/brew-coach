@@ -11,6 +11,7 @@ export const PALETTES = {
     collar: "#A9773C",
     brew: "#452B18",
     hot: "#9E3B24",
+    warn: "#B36B17",
     ok: "#3F6B4A",
   },
   dark: {
@@ -23,6 +24,7 @@ export const PALETTES = {
     collar: "#C6924F",
     brew: "#8A5A31",
     hot: "#E2705A",
+    warn: "#E0A458",
     ok: "#6BAE7C",
   },
 };

@@ -86,7 +86,12 @@ const sv = {
     step: (i, n) => `Steg ${i} av ${n}`,
     pourTo: "Häll till",
     nextStep: "Klart – nästa steg",
+    nextStepStartClock: "Klart – starta klockan",
     finished: "Bryggningen är klar",
+    nextAt: "Nästa steg",
+    autoAdvance: "Gå vidare automatiskt",
+    autoAdvanceHint: "Nästa steg startar av sig själv när tiden är inne.",
+    advancingSoon: "Går vidare …",
   },
 
   feedback: {
@@ -364,7 +369,12 @@ const en = {
     step: (i, n) => `Step ${i} of ${n}`,
     pourTo: "Pour to",
     nextStep: "Done – next step",
+    nextStepStartClock: "Done – start clock",
     finished: "Brewing is done",
+    nextAt: "Next step",
+    autoAdvance: "Auto-advance",
+    autoAdvanceHint: "The next step will start on its own when it's time.",
+    advancingSoon: "Advancing …",
   },
 
   feedback: {
