@@ -68,17 +68,19 @@ export const v60 = {
     decor: [
       // Den ljusa kanten längst upp på tratten.
       { path: "M14,12 L92,12 L86,20 L20,20 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      // Själva tratten: bred kant som smalnar av mot det enda, centrerade
-      // hålet — ett tydligt spetsigt V, till skillnad från Kalitas platta botten.
-      { path: "M20,20 L86,20 L58,90 L48,90 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Själva tratten: bred kant som smalnar av mot ett brett hål — inte
+      // lika spetsig som en riktig V60, men tydligt smalare än Kalitas
+      // platta botten.
+      { path: "M20,20 L86,20 L62,88 L44,88 Z", fill: "#FFFFFF", stroke: "#39362C" },
       // Spiralribborna, antydda som tre linjer som viftar ut mot kanten.
-      { line: { x1: 53, y1: 24, x2: 53, y2: 88 }, stroke: "#39362C" },
-      { line: { x1: 32, y1: 28, x2: 49, y2: 88 }, stroke: "#39362C" },
-      { line: { x1: 74, y1: 28, x2: 57, y2: 88 }, stroke: "#39362C" },
-      // Bandet där tratten möter karaffen.
-      { path: "M46,90 L60,90 L60,96 L46,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      // Handtaget på karaffen — en sluten ögla fäst i karaffens sida.
-      { path: "M84,116 C104,116 104,146 84,146", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
+      { line: { x1: 53, y1: 24, x2: 53, y2: 86 }, stroke: "#39362C" },
+      { line: { x1: 32, y1: 28, x2: 47, y2: 86 }, stroke: "#39362C" },
+      { line: { x1: 74, y1: 28, x2: 59, y2: 86 }, stroke: "#39362C" },
+      // Den tunna, flata basen där tratten möter karaffen.
+      { path: "M42,88 L64,88 L66,96 L40,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Handtaget på karaffen — fäst direkt i karaffens kant, utan luft
+      // emellan.
+      { path: "M78,114 C100,114 100,148 82,148", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };

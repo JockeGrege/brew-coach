@@ -52,8 +52,6 @@ export const chemex = {
     bottom: 152,
     glassPath: "M25,12 L47,88 L23,146 C23,152 27,156 33,156 L67,156 C73,156 77,152 77,146 L53,88 L75,12 Z",
     decor: [
-      // Antydan om vattenytan i den vida trattöppningen.
-      { path: "M29,15 C36,11 44,11 51,15 C58,19 63,19 71,15", fill: "none", stroke: "#39362C" },
       { path: "M40,74 L60,74 L63,100 L37,100 Z", fillToken: "collar" },
       { line: { x1: 37, y1: 87, x2: 63, y2: 87 }, stroke: "#7C5427" },
       // Läderbandets knut, med de två ändarna som hänger ner.

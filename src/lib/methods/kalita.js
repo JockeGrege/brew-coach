@@ -51,21 +51,19 @@ export const kalita = {
     decor: [
       // Det vågiga wave-filtret som sticker upp ovanför tratten.
       {
-        path: "M18,20 C26,14 34,14 42,20 C50,26 58,26 66,20 C74,14 82,14 90,20 L90,28 L18,28 Z",
+        path: "M18,36 C26,30 34,30 42,36 C50,42 58,42 66,36 C74,30 82,30 90,36 L90,44 L18,44 Z",
         fill: "#FFFFFF",
         stroke: "#39362C",
       },
       // Bred, flack tratt — smalnar av mot en platt botten i stället för en
       // spets, med solfjäderribbor som antyder filtrets veck.
-      { path: "M22,28 L86,28 L70,78 L38,78 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      { line: { x1: 34, y1: 32, x2: 40, y2: 76 }, stroke: "#39362C" },
-      { line: { x1: 54, y1: 32, x2: 54, y2: 76 }, stroke: "#39362C" },
-      { line: { x1: 74, y1: 32, x2: 68, y2: 76 }, stroke: "#39362C" },
-      // Den platta skivan tratten vilar i, bredare än både tratt och karaff.
-      { path: "M14,80 C14,76 94,76 94,80 C94,84 14,84 14,80 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      // De små benen som lyfter skivan över karaffens mynning.
-      { line: { x1: 28, y1: 84, x2: 30, y2: 100 }, stroke: "#39362C" },
-      { line: { x1: 80, y1: 84, x2: 78, y2: 100 }, stroke: "#39362C" },
+      { path: "M22,44 L86,44 L70,94 L38,94 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      { line: { x1: 34, y1: 48, x2: 40, y2: 92 }, stroke: "#39362C" },
+      { line: { x1: 54, y1: 48, x2: 54, y2: 92 }, stroke: "#39362C" },
+      { line: { x1: 74, y1: 48, x2: 68, y2: 92 }, stroke: "#39362C" },
+      // Den platta skivan tratten vilar i, bredare än både tratt och karaff
+      // — och dess underkant möter karaffens topp direkt, utan luft emellan.
+      { path: "M14,96 C14,92 94,92 94,96 C94,100 14,100 14,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
       // Handtaget på karaffen — en sluten ögla fäst i karaffens sida.
       { path: "M86,116 C106,116 106,144 86,144", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
