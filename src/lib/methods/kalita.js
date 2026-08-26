@@ -38,20 +38,35 @@ export const kalita = {
     viewBox: "0 0 168 172",
     width: 168,
     height: 172,
-    top: 92,
-    bottom: 152,
-    // The fillable vessel is the mug below the dripper (the dripper itself,
-    // in decor, sits above it and is drawn once, statically).
-    glassPath: "M44,92 L60,92 L74,142 C74,148 70,152 65,152 L39,152 C34,152 30,148 30,142 Z",
+    top: 100,
+    bottom: 158,
+    // The fillable vessel is the carafe below the dripper (the dripper
+    // itself, in decor, sits above it and is drawn once, statically). Its
+    // faceted, slightly angular body — vs. V60's rounder one — echoes the
+    // Kalita Wave's flat-bottomed, less curvy silhouette.
+    glassPath: "M32,100 L76,100 L86,132 L76,158 L32,158 L22,132 Z",
+    // Marken flyttas ut lite extra åt höger, så de inte kolliderar med
+    // handtaget på karaffen.
+    marksX: { tick1: 104, tick2: 116, label: 120 },
     decor: [
-      { path: "M15,16 L89,16 L83,24 L21,24 Z", fillToken: "collar" },
-      // Wide-flared, flat-bottomed funnel (vs. V60's cone to a point) with
-      // fanning rib lines, echoing the wave filter's ridges.
-      { path: "M21,24 L83,24 L68,84 L36,84 Z", fill: "#FFFFFF", stroke: "#39362C" },
-      { line: { x1: 34, y1: 28, x2: 40, y2: 82 }, stroke: "#39362C" },
-      { line: { x1: 52, y1: 28, x2: 52, y2: 82 }, stroke: "#39362C" },
-      { line: { x1: 70, y1: 28, x2: 64, y2: 82 }, stroke: "#39362C" },
-      { line: { x1: 36, y1: 84, x2: 68, y2: 84 }, stroke: "#39362C", strokeWidth: 2 },
+      // Det vågiga wave-filtret som sticker upp ovanför tratten.
+      {
+        path: "M18,36 C26,30 34,30 42,36 C50,42 58,42 66,36 C74,30 82,30 90,36 L90,44 L18,44 Z",
+        fill: "#FFFFFF",
+        stroke: "#39362C",
+      },
+      // Bred, flack tratt — smalnar av mot en platt botten i stället för en
+      // spets, med solfjäderribbor som antyder filtrets veck.
+      { path: "M22,44 L86,44 L70,94 L38,94 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      { line: { x1: 34, y1: 48, x2: 40, y2: 92 }, stroke: "#39362C" },
+      { line: { x1: 54, y1: 48, x2: 54, y2: 92 }, stroke: "#39362C" },
+      { line: { x1: 74, y1: 48, x2: 68, y2: 92 }, stroke: "#39362C" },
+      // Den platta skivan tratten vilar i, bredare än både tratt och karaff
+      // — och dess underkant möter karaffens topp direkt, utan luft emellan.
+      { path: "M14,96 C14,92 94,92 94,96 C94,100 14,100 14,96 Z", fill: "#FFFFFF", stroke: "#39362C" },
+      // Handtaget på karaffen — fäst direkt i karaffens kant, utan luft
+      // emellan.
+      { path: "M80,116 C102,116 102,144 80,144", fill: "none", stroke: "#39362C", strokeWidth: 2.5 },
     ],
   },
 };

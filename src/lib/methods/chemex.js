@@ -54,6 +54,9 @@ export const chemex = {
     decor: [
       { path: "M40,74 L60,74 L63,100 L37,100 Z", fillToken: "collar" },
       { line: { x1: 37, y1: 87, x2: 63, y2: 87 }, stroke: "#7C5427" },
+      // Läderbandets knut, med de två ändarna som hänger ner.
+      { line: { x1: 48, y1: 87, x2: 45, y2: 98 }, stroke: "#7C5427" },
+      { line: { x1: 52, y1: 87, x2: 55, y2: 98 }, stroke: "#7C5427" },
     ],
   },
 };
