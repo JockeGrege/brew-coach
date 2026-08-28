@@ -509,6 +509,11 @@ function EditFeedbackDialog({ T, fb, setFb, onSave, onCancel }) {
             />
           ))}
 
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, margin: "18px 0 8px" }}>
+            <span style={{ fontSize: 13, color: C.ink2 }}>{T.feedback.grindAdjusted}</span>
+            <Toggle checked={!!fb.grindAdjusted} onChange={() => setFb((f) => ({ ...f, grindAdjusted: !f.grindAdjusted }))} />
+          </div>
+
           <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
           <textarea
             value={fb.comment}
