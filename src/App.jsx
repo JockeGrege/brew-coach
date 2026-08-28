@@ -9,6 +9,7 @@ import { useMethod } from "./lib/method";
 import { useAutoAdvance } from "./lib/autoAdvance";
 import { pourTimes, timeWindow } from "./lib/methods/shared";
 import { loadInProgress, saveInProgress, clearInProgress } from "./lib/inProgress";
+import { loadConfirmedGrindOffset, saveConfirmedGrindOffset, clearConfirmedGrindOffset } from "./lib/grindConfirmed";
 
 /* ------------------------------------------------------------------ */
 /*  Designtokens                                                       */
@@ -620,9 +621,9 @@ function Choice({ label, sub, selected, onClick }) {
 
 function Row({ label, value, accent }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "9px 0", borderBottom: `1px solid ${C.line}` }}>
-      <span style={{ fontFamily: F.ui, fontSize: 14, color: C.ink2 }}>{label}</span>
-      <span style={{ fontFamily: F.mono, fontSize: 15, fontVariantNumeric: "tabular-nums", color: accent || C.ink }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 0", borderBottom: `1px solid ${C.line}` }}>
+      <span style={{ fontFamily: F.ui, fontSize: 14, color: C.ink2, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontFamily: F.mono, fontSize: 15, fontVariantNumeric: "tabular-nums", color: accent || C.ink, textAlign: "right" }}>{value}</span>
     </div>
   );
 }
@@ -837,14 +838,6 @@ export default function ChemexBrewCoach() {
   // state, which belongs to the brew actually in progress right now.
   const [editingBrew, setEditingBrew] = useState(null);
   const [editFb, setEditFb] = useState({ taste: null, flow: null, comment: "" });
-  // Set when "Fortsätt från förra" is used on a brew with a pending taste
-  // review — the review has to be filled in before continuing is allowed,
-  // so saving the edit then proceeds straight into Setup afterward.
-  const [continueAfterEdit, setContinueAfterEdit] = useState(false);
-  // Confirms the grinder has actually been set to match a recipe whose
-  // grind differs from the last real brew — reset whenever a new recipe is
-  // built, so it can't carry a stale "yes" over to a different change.
-  const [grinderConfirmed, setGrinderConfirmed] = useState(false);
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const [autoAdvancePending, setAutoAdvancePending] = useState(false);
@@ -860,6 +853,29 @@ export default function ChemexBrewCoach() {
   useEffect(() => {
     setInProgress(loadInProgress(method));
   }, [method]);
+
+  // The grind offset the brewer has actually confirmed setting the grinder
+  // to, for whichever method is active — null means "not confirmed since
+  // the last actual brew," in which case that brew's own offset is used as
+  // the assumed starting point. Confirming it once (on the Next-brew
+  // screen right after a suggestion, or on the Recipe screen before
+  // starting) covers both places; neither needs to ask again once it
+  // matches.
+  const [confirmedGrindOffset, setConfirmedGrindOffsetState] = useState(() => loadConfirmedGrindOffset(method));
+
+  useEffect(() => {
+    setConfirmedGrindOffsetState(loadConfirmedGrindOffset(method));
+  }, [method]);
+
+  function confirmGrindOffset(methodKey, offset) {
+    saveConfirmedGrindOffset(methodKey, offset);
+    if (methodKey === method) setConfirmedGrindOffsetState(offset);
+  }
+
+  function unconfirmGrindOffset(methodKey) {
+    clearConfirmedGrindOffset(methodKey);
+    if (methodKey === method) setConfirmedGrindOffsetState(null);
+  }
 
   // Once a recipe exists, the brew is worth resuming — auto-save it under
   // this method's own slot on every change (including every clock tick)
@@ -977,6 +993,10 @@ export default function ChemexBrewCoach() {
   // to the other method untouched.
   async function clearAllBrews() {
     await persist(brews.filter((b) => (b.method || "chemex") !== method));
+    // With no brews left, a remembered "grinder confirmed at offset N"
+    // no longer means anything — without this, the Recipe screen's gate
+    // would keep comparing against a setting from history that's gone.
+    unconfirmGrindOffset(method);
   }
 
   /* Klocka */
@@ -1206,7 +1226,6 @@ export default function ChemexBrewCoach() {
     const r = buildRecipe(activeMethod, { ...cfg, dose }, T);
     setRecipe(r);
     setSteps(buildSteps(activeMethod, r, T));
-    setGrinderConfirmed(false);
     goTo("recipe");
   }
 
@@ -1281,7 +1300,7 @@ export default function ChemexBrewCoach() {
     goTo(pending ? "home" : "next");
   }
 
-  function editFeedback(brew, continueAfter) {
+  function editFeedback(brew) {
     setEditingBrew(brew);
     setEditFb({
       taste: brew.feedback.taste,
@@ -1293,7 +1312,6 @@ export default function ChemexBrewCoach() {
       missSeconds: brew.feedback.missSeconds || 0,
       windowWidth: brew.feedback.windowWidth || 0,
     });
-    setContinueAfterEdit(!!continueAfter);
   }
 
   async function saveEditFeedback() {
@@ -1303,9 +1321,12 @@ export default function ChemexBrewCoach() {
     const pseudoRecipe = {
       method: editingBrew.method,
       roast: editingBrew.roast,
+      dose: editingBrew.coffeeDose,
       grindOffset: editingBrew.grindOffset,
       temperature: editingBrew.temperature,
       ratio: editingBrew.ratio,
+      roastDate: editingBrew.roastDate || null,
+      bestBefore: editingBrew.bestBefore || null,
       rest: null,
     };
     const s = suggest(pseudoRecipe, editFb, T);
@@ -1316,22 +1337,12 @@ export default function ChemexBrewCoach() {
     };
     await persist(brews.map((b) => (b.id === editingBrew.id ? updated : b)));
     setEditingBrew(null);
-    if (continueAfterEdit) {
-      setContinueAfterEdit(false);
-      openSetup(
-        {
-          roast: updated.roast,
-          inputMode: "dose",
-          dose: updated.coffeeDose,
-          ratio: updated.suggestedNext.ratio,
-          temperature: updated.suggestedNext.temperature,
-          grindOffset: updated.suggestedNext.grindOffset,
-          roastDate: updated.roastDate || null,
-          bestBefore: updated.bestBefore || null,
-        },
-        updated.method || "chemex"
-      );
-    }
+    // Land on the same "here's how to adjust" screen a live brew ends on,
+    // rather than jumping straight into a new setup — the suggestion was
+    // just recomputed from the edited answer, so it deserves the same
+    // review-then-confirm step ("Använd förslaget") before it's applied.
+    setResult({ recipe: pseudoRecipe, s });
+    goTo("next");
   }
 
   const poured = (() => {
@@ -1339,6 +1350,12 @@ export default function ChemexBrewCoach() {
     const done = steps.slice(0, stepIndex).filter((s) => s.target);
     return done.length ? done[done.length - 1].target : 0;
   })();
+
+  // What the grinder is assumed to actually be set to right now: whatever
+  // was last explicitly confirmed, or (if nothing has been confirmed since)
+  // the last real brew's own setting.
+  const grindReferenceOffset = recipe && (confirmedGrindOffset ?? (last ? last.grindOffset : recipe.grindOffset));
+  const grindChangeNeeded = !!(recipe && last && grindReferenceOffset !== recipe.grindOffset);
 
   // When the current step has a known target time (the point the next step
   // should begin), the clock warns as that moment approaches: orange inside
@@ -1383,10 +1400,7 @@ export default function ChemexBrewCoach() {
           fb={editFb}
           setFb={setEditFb}
           onSave={saveEditFeedback}
-          onCancel={() => {
-            setEditingBrew(null);
-            setContinueAfterEdit(false);
-          }}
+          onCancel={() => setEditingBrew(null)}
         />
       )}
       {showSources && (
@@ -1634,7 +1648,7 @@ export default function ChemexBrewCoach() {
                             // Can't continue from a suggestion that hasn't
                             // actually been computed from a real taste
                             // answer yet — fill that in first.
-                            editFeedback(last, true);
+                            editFeedback(last);
                             return;
                           }
                           openSetup(
@@ -1660,7 +1674,11 @@ export default function ChemexBrewCoach() {
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={() => openSetup({})}>{T.home.newBrew}</Button>
+                    // No brew to continue from, so this is always "from
+                    // scratch" — reuses the same reset as newFromZero
+                    // rather than leaving cfg.grindOffset at whatever a
+                    // now-deleted brew's suggestion last left it at.
+                    <Button onClick={() => startNewFromZero()}>{T.home.newBrew}</Button>
                   )}
                 </div>
               </Card>
@@ -1849,23 +1867,23 @@ export default function ChemexBrewCoach() {
             )}
             <Row label={T.recipe.targetTime} value={`${fmt(recipe.targetLo)}–${fmt(recipe.targetHi)}`} />
 
-            {last && last.grindOffset !== recipe.grindOffset && (
+            {grindChangeNeeded && (
               <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 16, paddingTop: 16 }}>
                 <div style={{ fontSize: 13.5, color: C.ink2, marginBottom: 10 }}>
                   {T.recipe.grindChangeNeeded(
-                    Math.abs(recipe.grindOffset - last.grindOffset),
-                    recipe.grindOffset > last.grindOffset ? T.next.coarser : T.next.finer
+                    Math.abs(recipe.grindOffset - grindReferenceOffset),
+                    recipe.grindOffset > grindReferenceOffset ? T.next.coarser : T.next.finer
                   )}
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
                   <span style={{ fontSize: 13, color: C.ink2 }}>{T.recipe.grindChangeConfirm}</span>
-                  <Toggle checked={grinderConfirmed} onChange={() => setGrinderConfirmed((v) => !v)} />
+                  <Toggle checked={false} onChange={() => confirmGrindOffset(recipe.method, recipe.grindOffset)} />
                 </div>
               </div>
             )}
 
             <div style={{ marginTop: 22 }}>
-              <Button onClick={startBrew} disabled={last && last.grindOffset !== recipe.grindOffset && !grinderConfirmed}>
+              <Button onClick={startBrew} disabled={grindChangeNeeded}>
                 {T.recipe.startBrewing}
               </Button>
               <Button variant="plain" onClick={() => window.history.back()} style={{ marginTop: 6 }}>
@@ -2046,6 +2064,30 @@ export default function ChemexBrewCoach() {
             {changeList(result.recipe, result.s, T).map((r) => (
               <Row key={r.label} label={r.label} value={r.value} accent={r.changed ? C.collar : C.ink3} />
             ))}
+
+            {result.s.grindStep !== 0 && (
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  gap: 12,
+                  borderTop: `1px solid ${C.line}`,
+                  marginTop: 16,
+                  paddingTop: 16,
+                }}
+              >
+                <span style={{ fontSize: 13, color: C.ink2 }}>{T.next.grinderConfirmNow}</span>
+                <Toggle
+                  checked={confirmedGrindOffset === result.s.grindOffset}
+                  onChange={() =>
+                    confirmedGrindOffset === result.s.grindOffset
+                      ? unconfirmGrindOffset(result.recipe.method)
+                      : confirmGrindOffset(result.recipe.method, result.s.grindOffset)
+                  }
+                />
+              </div>
+            )}
 
             <div style={{ marginTop: 22 }}>
               <Button
