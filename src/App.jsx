@@ -65,7 +65,7 @@ function grindNote(methodKey, roastKey, offset, T) {
 // summary it was designed for (e.g. "2 steps finer" when only this one
 // suggestion moved it 1 step).
 function grindStepNote(step, T) {
-  return step ? T.next.grindStep(step > 0 ? T.next.coarser : T.next.finer) : T.next.unchanged;
+  return step ? T.next.grindStep(Math.abs(step), step > 0 ? T.next.coarser : T.next.finer) : T.next.unchanged;
 }
 
 function doseFromCups(cups, ratio) {
@@ -255,11 +255,26 @@ function suggest(recipe, fb, T) {
   let ratio = recipe.ratio;
   const why = [];
 
-  if (fb.flow === "slow") grind = 1;
-  if (fb.flow === "fast") grind = -1;
+  // How many steps a time miss is worth: brewing guides consistently treat
+  // grind-to-time as too sensitive/non-linear to correct in one big jump —
+  // most fixes are 1 click, occasionally 2, rarely 3, even for a large
+  // miss (which more often points at technique/channeling than pure grind).
+  // Scaled against this recipe's own target window, not a fixed second
+  // count, since that width already varies a lot by method and dose.
+  const windowWidth = fb.windowWidth || 30;
+  const missSteps = (() => {
+    const miss = fb.missSeconds || 0;
+    if (miss <= 0) return 0;
+    if (miss <= windowWidth) return 1;
+    if (miss <= windowWidth * 2.5) return 2;
+    return 3;
+  })();
+
+  if (fb.flow === "slow") grind = missSteps;
+  if (fb.flow === "fast") grind = -missSteps;
 
   if (fb.taste === "sour") {
-    if (grind === 1) {
+    if (grind > 0) {
       const t = clamp(temperature + 1, roast.tempMin, roast.tempMax);
       if (t !== temperature) {
         temperature = t;
@@ -267,7 +282,7 @@ function suggest(recipe, fb, T) {
       } else {
         why.push(T.suggest.sourGrindCoarserTempMaxed(temperature, roastLabel));
       }
-    } else if (grind === -1) {
+    } else if (grind < 0) {
       why.push(T.suggest.sourAlreadyFiner);
     } else {
       grind = -1;
@@ -276,7 +291,7 @@ function suggest(recipe, fb, T) {
   }
 
   if (fb.taste === "bitter") {
-    if (grind === -1) {
+    if (grind < 0) {
       const t = clamp(temperature - 2, roast.tempMin, roast.tempMax);
       if (t !== temperature) {
         temperature = t;
@@ -284,7 +299,7 @@ function suggest(recipe, fb, T) {
       } else {
         why.push(T.suggest.bitterGrindFinerTempMinned(temperature, roastLabel));
       }
-    } else if (grind === 1) {
+    } else if (grind > 0) {
       why.push(T.suggest.bitterAlreadyCoarser);
     } else {
       grind = 1;
@@ -342,7 +357,7 @@ function changeList(recipe, s, T) {
   const rows = [];
   rows.push({
     label: T.recipe.grind,
-    value: s.grindStep === 0 ? T.next.unchanged : T.next.grindStep(s.grindStep > 0 ? T.next.coarser : T.next.finer),
+    value: s.grindStep === 0 ? T.next.unchanged : T.next.grindStep(Math.abs(s.grindStep), s.grindStep > 0 ? T.next.coarser : T.next.finer),
     changed: s.grindStep !== 0,
   });
   rows.push({
@@ -1215,7 +1230,18 @@ export default function ChemexBrewCoach() {
       setRunning(false);
       const [lo, hi] = [recipe.targetLo, recipe.targetHi];
       setActual(elapsed);
-      setFb({ taste: null, flow: elapsed > hi ? "slow" : elapsed < lo ? "fast" : "ok", comment: "" });
+      // How far outside the target window the brew actually landed, kept
+      // alongside the flow verdict so suggest() can scale the grind
+      // adjustment to the size of the miss instead of always nudging by a
+      // flat single step.
+      const missSeconds = elapsed > hi ? elapsed - hi : elapsed < lo ? lo - elapsed : 0;
+      setFb({
+        taste: null,
+        flow: elapsed > hi ? "slow" : elapsed < lo ? "fast" : "ok",
+        missSeconds,
+        windowWidth: hi - lo,
+        comment: "",
+      });
       goTo("feedback");
       return;
     }
@@ -1261,6 +1287,11 @@ export default function ChemexBrewCoach() {
       taste: brew.feedback.taste,
       flow: brew.feedback.flow,
       comment: brew.feedback.comment || "",
+      // Carried through so a retroactive edit still scales the grind
+      // suggestion to how far off the actual brew time was, same as the
+      // original feedback did.
+      missSeconds: brew.feedback.missSeconds || 0,
+      windowWidth: brew.feedback.windowWidth || 0,
     });
     setContinueAfterEdit(!!continueAfter);
   }
@@ -2015,7 +2046,6 @@ export default function ChemexBrewCoach() {
             {changeList(result.recipe, result.s, T).map((r) => (
               <Row key={r.label} label={r.label} value={r.value} accent={r.changed ? C.collar : C.ink3} />
             ))}
-            <Row label={T.next.newGrind} value={grindNote(result.recipe.method, result.recipe.roast, result.s.grindOffset, T)} />
 
             <div style={{ marginTop: 22 }}>
               <Button

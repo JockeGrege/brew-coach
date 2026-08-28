@@ -119,11 +119,10 @@ const sv = {
     eyebrow: "Nästa bryggning",
     changeNothing: "Ändra ingenting.",
     howToAdjust: "Så här justerar du.",
-    newGrind: "Ny malning",
     useSuggestion: "Använd förslaget",
     done: "Klart för idag",
     unchanged: "Oförändrad",
-    grindStep: (dir) => `1 steg ${dir}`,
+    grindStep: (n, dir) => `${n} steg ${dir}`,
     coarser: "grövre",
     finer: "finare",
     tempUnchanged: (t) => `${t} °C, oförändrad`,
@@ -175,7 +174,7 @@ const sv = {
     ok: "inom måltiden",
   },
 
-  grindNote: (base, steps, dir) => `${base}, ${steps} steg ${dir}`,
+  grindNote: (base, steps, dir) => `${base}, ${steps} steg ${dir} än grundinställningen`,
 
   steps: {
     grind: {
@@ -424,11 +423,10 @@ const en = {
     eyebrow: "Next brew",
     changeNothing: "Change nothing.",
     howToAdjust: "Here's how to adjust.",
-    newGrind: "New grind",
     useSuggestion: "Use the suggestion",
     done: "Done for today",
     unchanged: "Unchanged",
-    grindStep: (dir) => `1 step ${dir}`,
+    grindStep: (n, dir) => `${n} step${n === 1 ? "" : "s"} ${dir}`,
     coarser: "coarser",
     finer: "finer",
     tempUnchanged: (t) => `${t} °C, unchanged`,
@@ -480,7 +478,7 @@ const en = {
     ok: "within target",
   },
 
-  grindNote: (base, steps, dir) => `${base}, ${steps} step${steps > 1 ? "s" : ""} ${dir}`,
+  grindNote: (base, steps, dir) => `${base}, ${steps} step${steps > 1 ? "s" : ""} ${dir} than the baseline`,
 
   steps: {
     grind: {
