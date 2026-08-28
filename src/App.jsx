@@ -2041,7 +2041,7 @@ export default function ChemexBrewCoach() {
             <Eyebrow>{T.feedback.step}</Eyebrow>
             <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 4px", fontWeight: 400 }}>{T.feedback.heading}</h2>
             <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginBottom: 18 }}>
-              {T.feedback.meta(recipe.dose, recipe.ratio, recipe.temperature, fmt(actual), fmt(recipe.target))}
+              {T.feedback.meta(recipe.dose, recipe.ratio, recipe.temperature, fmt(actual), fmt(recipe.targetLo), fmt(recipe.targetHi))}
             </div>
 
             <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.feedback.taste}</div>
@@ -2194,7 +2194,8 @@ export default function ChemexBrewCoach() {
                 <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 8, lineHeight: 1.7 }}>
                   {b.coffeeDose} g · {b.water} g · 1:{b.ratio} · {b.temperature} °C
                   <br />
-                  {b.grindNote} · {T.history.timing(b.actualTime, b.targetTime)}
+                  {b.grindNote} ·{" "}
+                  {T.history.timing(b.actualTime, b.targetLo != null && b.targetHi != null ? `${fmt(b.targetLo)}–${fmt(b.targetHi)}` : b.targetTime)}
                   {b.restDays != null ? T.history.offRoastSuffix(b.restDays) : ""}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.ink, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>
