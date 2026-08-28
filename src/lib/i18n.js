@@ -127,6 +127,7 @@ const sv = {
     finer: "finare",
     tempUnchanged: (t) => `${t} °C, oförändrad`,
     ratioUnchanged: (r) => `1:${r}, oförändrad`,
+    grinderConfirmNow: "Jag har nu ställt in kvarnen",
   },
 
   history: {
@@ -431,6 +432,7 @@ const en = {
     finer: "finer",
     tempUnchanged: (t) => `${t} °C, unchanged`,
     ratioUnchanged: (r) => `1:${r}, unchanged`,
+    grinderConfirmNow: "I've now set the grinder",
   },
 
   history: {
