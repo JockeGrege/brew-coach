@@ -621,9 +621,9 @@ function Choice({ label, sub, selected, onClick }) {
 
 function Row({ label, value, accent }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", padding: "9px 0", borderBottom: `1px solid ${C.line}` }}>
-      <span style={{ fontFamily: F.ui, fontSize: 14, color: C.ink2 }}>{label}</span>
-      <span style={{ fontFamily: F.mono, fontSize: 15, fontVariantNumeric: "tabular-nums", color: accent || C.ink }}>{value}</span>
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12, padding: "9px 0", borderBottom: `1px solid ${C.line}` }}>
+      <span style={{ fontFamily: F.ui, fontSize: 14, color: C.ink2, flexShrink: 0 }}>{label}</span>
+      <span style={{ fontFamily: F.mono, fontSize: 15, fontVariantNumeric: "tabular-nums", color: accent || C.ink, textAlign: "right" }}>{value}</span>
     </div>
   );
 }
