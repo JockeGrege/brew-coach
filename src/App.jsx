@@ -255,14 +255,8 @@ function suggest(recipe, fb, T) {
   let ratio = recipe.ratio;
   const why = [];
 
-  // If the brewer already hand-adjusted the grind themselves, don't also
-  // recommend a grind change on top of that — just note it happened.
-  if (!fb.grindAdjusted) {
-    if (fb.flow === "slow") grind = 1;
-    if (fb.flow === "fast") grind = -1;
-  } else if (fb.flow === "slow" || fb.flow === "fast") {
-    why.push(T.suggest.grindAlreadyAdjusted);
-  }
+  if (fb.flow === "slow") grind = 1;
+  if (fb.flow === "fast") grind = -1;
 
   if (fb.taste === "sour") {
     if (grind === 1) {
@@ -517,11 +511,6 @@ function EditFeedbackDialog({ T, fb, setFb, onSave, onCancel }) {
               onClick={() => setFb((f) => ({ ...f, flow: k }))}
             />
           ))}
-
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, margin: "18px 0 8px" }}>
-            <span style={{ fontSize: 13, color: C.ink2 }}>{T.feedback.grindAdjusted}</span>
-            <Toggle checked={!!fb.grindAdjusted} onChange={() => setFb((f) => ({ ...f, grindAdjusted: !f.grindAdjusted }))} />
-          </div>
 
           <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
           <textarea
@@ -837,6 +826,10 @@ export default function ChemexBrewCoach() {
   // review — the review has to be filled in before continuing is allowed,
   // so saving the edit then proceeds straight into Setup afterward.
   const [continueAfterEdit, setContinueAfterEdit] = useState(false);
+  // Confirms the grinder has actually been set to match a recipe whose
+  // grind differs from the last real brew — reset whenever a new recipe is
+  // built, so it can't carry a stale "yes" over to a different change.
+  const [grinderConfirmed, setGrinderConfirmed] = useState(false);
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const [autoAdvancePending, setAutoAdvancePending] = useState(false);
@@ -1198,6 +1191,7 @@ export default function ChemexBrewCoach() {
     const r = buildRecipe(activeMethod, { ...cfg, dose }, T);
     setRecipe(r);
     setSteps(buildSteps(activeMethod, r, T));
+    setGrinderConfirmed(false);
     goTo("recipe");
   }
 
@@ -1267,7 +1261,6 @@ export default function ChemexBrewCoach() {
       taste: brew.feedback.taste,
       flow: brew.feedback.flow,
       comment: brew.feedback.comment || "",
-      grindAdjusted: brew.feedback.grindAdjusted || false,
     });
     setContinueAfterEdit(!!continueAfter);
   }
@@ -1825,8 +1818,25 @@ export default function ChemexBrewCoach() {
             )}
             <Row label={T.recipe.targetTime} value={`${fmt(recipe.targetLo)}–${fmt(recipe.targetHi)}`} />
 
+            {last && last.grindOffset !== recipe.grindOffset && (
+              <div style={{ borderTop: `1px solid ${C.line}`, marginTop: 16, paddingTop: 16 }}>
+                <div style={{ fontSize: 13.5, color: C.ink2, marginBottom: 10 }}>
+                  {T.recipe.grindChangeNeeded(
+                    Math.abs(recipe.grindOffset - last.grindOffset),
+                    recipe.grindOffset > last.grindOffset ? T.next.coarser : T.next.finer
+                  )}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 13, color: C.ink2 }}>{T.recipe.grindChangeConfirm}</span>
+                  <Toggle checked={grinderConfirmed} onChange={() => setGrinderConfirmed((v) => !v)} />
+                </div>
+              </div>
+            )}
+
             <div style={{ marginTop: 22 }}>
-              <Button onClick={startBrew}>{T.recipe.startBrewing}</Button>
+              <Button onClick={startBrew} disabled={last && last.grindOffset !== recipe.grindOffset && !grinderConfirmed}>
+                {T.recipe.startBrewing}
+              </Button>
               <Button variant="plain" onClick={() => window.history.back()} style={{ marginTop: 6 }}>
                 {T.recipe.changeSettings}
               </Button>
@@ -1960,11 +1970,6 @@ export default function ChemexBrewCoach() {
                 onClick={() => setFb((f) => ({ ...f, flow: k }))}
               />
             ))}
-
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, margin: "18px 0 8px" }}>
-              <span style={{ fontSize: 13, color: C.ink2 }}>{T.feedback.grindAdjusted}</span>
-              <Toggle checked={!!fb.grindAdjusted} onChange={() => setFb((f) => ({ ...f, grindAdjusted: !f.grindAdjusted }))} />
-            </div>
 
             <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
             <textarea

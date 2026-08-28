@@ -77,6 +77,8 @@ const sv = {
     targetTime: "Måltid",
     startBrewing: "Starta bryggningen",
     changeSettings: "Ändra inställningar",
+    grindChangeNeeded: (steps, dir) => `Malningen ska ställas ${steps} steg ${dir} jämfört med förra bryggningen.`,
+    grindChangeConfirm: "Jag har ställt in kvarnen",
   },
 
   brewScreen: {
@@ -110,7 +112,6 @@ const sv = {
     notePlaceholder: "Nytt kaffe, kallt kök, hällde slarvigt …",
     save: "Spara och få nästa förslag",
     pickBoth: "Välj både smak och tid för att gå vidare.",
-    grindAdjusted: "Jag har redan justerat malningen",
     answerLater: "Svara senare",
   },
 
@@ -242,7 +243,6 @@ const sv = {
   },
 
   suggest: {
-    grindAlreadyAdjusted: "Du har redan justerat malningen, så tiden räknas inte in i förslaget den här gången.",
     sourGrindCoarserTempWarmer: "Surt betyder underextraherat, men tiden drog över — därför grövre malning och en grad varmare vatten i stället.",
     sourGrindCoarserTempMaxed: (temp, roastLabel) =>
       `Surt betyder underextraherat. Malningen får ändå gå grövre eftersom tiden drog över, och ${temp} °C är redan max för ${roastLabel}.`,
@@ -382,6 +382,8 @@ const en = {
     targetTime: "Target time",
     startBrewing: "Start brewing",
     changeSettings: "Change settings",
+    grindChangeNeeded: (steps, dir) => `The grind needs to be set ${steps} step${steps === 1 ? "" : "s"} ${dir} compared to your last brew.`,
+    grindChangeConfirm: "I've set the grinder",
   },
 
   brewScreen: {
@@ -415,7 +417,6 @@ const en = {
     notePlaceholder: "New coffee, cold kitchen, sloppy pour …",
     save: "Save and get the next suggestion",
     pickBoth: "Pick both taste and time to continue.",
-    grindAdjusted: "I've already adjusted the grind",
     answerLater: "Answer later",
   },
 
@@ -547,7 +548,6 @@ const en = {
   },
 
   suggest: {
-    grindAlreadyAdjusted: "You've already adjusted the grind, so time isn't factored into this suggestion.",
     sourGrindCoarserTempWarmer: "Sour means underextracted, but the time ran long — so coarser grind and one degree warmer water instead.",
     sourGrindCoarserTempMaxed: (temp, roastLabel) =>
       `Sour means underextracted. The grind still goes coarser since the time ran long, and ${temp} °C is already the max for ${roastLabel}.`,
