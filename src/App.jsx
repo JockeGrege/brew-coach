@@ -247,6 +247,31 @@ function buildSteps(method, r, T) {
 }
 
 /* Regelmotorn: flödet styr malningen, smaken får temperatur och ratio. */
+// Concrete, evidence-based explanation for a grind change driven by a
+// timing miss: cites the brew's actual time against its target window
+// (rather than just "slow"/"fast") and states the physical reason grind
+// fixes it — finer grind adds resistance and slows the flow through the
+// bed (raising the next brew's time), coarser grind does the opposite.
+// Skipped when there's no target window to compare against (older saved
+// brews, edited before that was tracked) or when the miss wasn't a timing
+// one at all (taste alone forced the step).
+function grindMechanismNote(recipe, fb, grind, T) {
+  if (!grind) return null;
+  if (fb.flow !== "slow" && fb.flow !== "fast") return null;
+  if (recipe.targetLo == null || recipe.targetHi == null) return null;
+  const actual = fb.flow === "slow" ? recipe.targetHi + (fb.missSeconds || 0) : recipe.targetLo - (fb.missSeconds || 0);
+  return T.suggest.grindMechanism(fmt(actual), fmt(recipe.targetLo), fmt(recipe.targetHi), grind > 0);
+}
+
+// Short, evidence-based explanation for a temperature change: warmer water
+// dissolves compounds faster and raises extraction, cooler water does the
+// opposite — stated independently of whatever taste reasoning triggered
+// the change, same as the ratio explanations already do for strength.
+function tempMechanismNote(recipe, temperature, T) {
+  if (temperature === recipe.temperature) return null;
+  return T.suggest.tempMechanism(temperature, temperature > recipe.temperature);
+}
+
 function suggest(recipe, fb, T) {
   const method = METHODS[recipe.method];
   const roast = method.ROASTS[recipe.roast];
@@ -344,6 +369,11 @@ function suggest(recipe, fb, T) {
   if (rest && (rest.key === "fading" || rest.key === "old") && (fb.taste === "weak" || fb.taste === "sour")) {
     why.push(T.suggest.fadingOldWeakOrSour(rest.days));
   }
+
+  const missNote = grindMechanismNote(recipe, fb, grind, T);
+  if (missNote) why.push(missNote);
+  const tempNote = tempMechanismNote(recipe, temperature, T);
+  if (tempNote) why.push(tempNote);
 
   return {
     grindOffset: clamp(recipe.grindOffset + grind, -6, 6),
@@ -1290,6 +1320,11 @@ export default function ChemexBrewCoach() {
       restDays: recipe.rest ? recipe.rest.days : null,
       targetTime: fmt(recipe.target),
       actualTime: fmt(actual),
+      // Kept as raw seconds (targetTime/actualTime above are already
+      // formatted for display) so a later retroactive edit can still
+      // reconstruct the concrete "took X against Y–Z" grind explanation.
+      targetLo: recipe.targetLo,
+      targetHi: recipe.targetHi,
       feedback: fbToSave,
       suggestedNext: { grindOffset: s.grindOffset, grindStep: s.grindStep, temperature: s.temperature, ratio: s.ratio },
     };
@@ -1327,6 +1362,11 @@ export default function ChemexBrewCoach() {
       ratio: editingBrew.ratio,
       roastDate: editingBrew.roastDate || null,
       bestBefore: editingBrew.bestBefore || null,
+      // Undefined on brews saved before these were tracked — the grind
+      // mechanism note below simply skips the concrete time comparison in
+      // that case rather than showing a bogus one.
+      targetLo: editingBrew.targetLo,
+      targetHi: editingBrew.targetHi,
       rest: null,
     };
     const s = suggest(pseudoRecipe, editFb, T);

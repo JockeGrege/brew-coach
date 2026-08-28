@@ -264,6 +264,14 @@ const sv = {
       `Med ${days} dagar från rost kan en del av surheten vara CO₂ snarare än underextraktion. Justeringen ovan gäller tiden — vänta med att jaga smaken tills kaffet vilat ut.`,
     fadingOldWeakOrSour: (days) =>
       `Kaffet är ${days} dagar gammalt. Tunnhet och platta toner så här sent är bortvittrad aromatik, och receptet kan dölja det men inte lösa det.`,
+    grindMechanism: (actual, lo, hi, coarser) =>
+      coarser
+        ? `Bryggningen tog ${actual} mot målfönstret ${lo}–${hi}. Grövre malning ökar flödet genom bädden och kortar tiden till nästa gång.`
+        : `Bryggningen tog ${actual} mot målfönstret ${lo}–${hi}. Finare malning bromsar flödet genom bädden och förlänger tiden till nästa gång.`,
+    tempMechanism: (temp, warmer) =>
+      warmer
+        ? `Varmare vatten löser ut smakämnena snabbare, vilket höjer extraktionen — ${temp} °C nu.`
+        : `Kallare vatten löser ut smakämnena långsammare, vilket sänker extraktionen — ${temp} °C nu.`,
   },
 
   rest: {
@@ -569,6 +577,14 @@ const en = {
       `With ${days} days off roast, some of the sourness could be CO₂ rather than underextraction. The adjustment above is for the timing — hold off chasing the taste until the coffee has rested more.`,
     fadingOldWeakOrSour: (days) =>
       `The coffee is ${days} days old. Thinness and flat notes this late are faded aromatics, and the recipe can mask that but not fix it.`,
+    grindMechanism: (actual, lo, hi, coarser) =>
+      coarser
+        ? `The brew took ${actual} against a ${lo}–${hi} target. Coarser grind speeds up the flow through the bed and shortens the time next round.`
+        : `The brew took ${actual} against a ${lo}–${hi} target. Finer grind slows the flow through the bed and extends the time next round.`,
+    tempMechanism: (temp, warmer) =>
+      warmer
+        ? `Warmer water dissolves the flavor compounds faster, which raises extraction — ${temp} °C now.`
+        : `Cooler water dissolves the flavor compounds slower, which lowers extraction — ${temp} °C now.`,
   },
 
   rest: {
