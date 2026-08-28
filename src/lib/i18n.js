@@ -35,6 +35,8 @@ const sv = {
     loadingBrews: "Läser in sparade bryggningar …",
     inProgressEyebrow: "Pågående bryggning",
     continueBrew: (methodLabel) => `Fortsätt ${methodLabel}-bryggningen`,
+    editFeedback: "Ändra svar",
+    tastePending: "Smakbedömning väntar",
   },
 
   setup: {
@@ -108,6 +110,8 @@ const sv = {
     notePlaceholder: "Nytt kaffe, kallt kök, hällde slarvigt …",
     save: "Spara och få nästa förslag",
     pickBoth: "Välj både smak och tid för att gå vidare.",
+    grindAdjusted: "Jag har redan justerat malningen",
+    answerLater: "Svara senare",
   },
 
   next: {
@@ -135,6 +139,7 @@ const sv = {
     toHome: "Till startsidan",
     clearAll: "Radera allt",
     remove: "Ta bort",
+    continueFromThis: "Fortsätt härifrån",
   },
 
   confirm: {
@@ -145,6 +150,8 @@ const sv = {
     removeOne: "Ta bort den här bryggningen? Det går inte att ångra.",
     abortBrew: "Vill du avbryta den pågående bryggningen? Framstegen sparas inte.",
     abortBrewConfirm: "Avbryt bryggningen",
+    startNewWhileInProgress: "Du har en pågående bryggning. Är du säker på att du vill starta en ny bryggning?",
+    continueFromHistory: "Vill du fortsätta från den här bryggningen?",
   },
 
   roasts: {
@@ -235,6 +242,7 @@ const sv = {
   },
 
   suggest: {
+    grindAlreadyAdjusted: "Du har redan justerat malningen, så tiden räknas inte in i förslaget den här gången.",
     sourGrindCoarserTempWarmer: "Surt betyder underextraherat, men tiden drog över — därför grövre malning och en grad varmare vatten i stället.",
     sourGrindCoarserTempMaxed: (temp, roastLabel) =>
       `Surt betyder underextraherat. Malningen får ändå gå grövre eftersom tiden drog över, och ${temp} °C är redan max för ${roastLabel}.`,
@@ -332,6 +340,8 @@ const en = {
     loadingBrews: "Loading saved brews …",
     inProgressEyebrow: "Brew in progress",
     continueBrew: (methodLabel) => `Continue ${methodLabel} Brew`,
+    editFeedback: "Edit answer",
+    tastePending: "Taste review pending",
   },
 
   setup: {
@@ -405,6 +415,8 @@ const en = {
     notePlaceholder: "New coffee, cold kitchen, sloppy pour …",
     save: "Save and get the next suggestion",
     pickBoth: "Pick both taste and time to continue.",
+    grindAdjusted: "I've already adjusted the grind",
+    answerLater: "Answer later",
   },
 
   next: {
@@ -432,6 +444,7 @@ const en = {
     toHome: "Back to home",
     clearAll: "Delete all",
     remove: "Remove",
+    continueFromThis: "Continue from this",
   },
 
   confirm: {
@@ -442,6 +455,8 @@ const en = {
     removeOne: "Remove this brew? This can't be undone.",
     abortBrew: "Abort the brew in progress? Your progress won't be saved.",
     abortBrewConfirm: "Abort brewing",
+    startNewWhileInProgress: "You currently have a brew going. Are you sure you want to start a new brew?",
+    continueFromHistory: "Do you want to continue from this brew?",
   },
 
   roasts: {
@@ -532,6 +547,7 @@ const en = {
   },
 
   suggest: {
+    grindAlreadyAdjusted: "You've already adjusted the grind, so time isn't factored into this suggestion.",
     sourGrindCoarserTempWarmer: "Sour means underextracted, but the time ran long — so coarser grind and one degree warmer water instead.",
     sourGrindCoarserTempMaxed: (temp, roastLabel) =>
       `Sour means underextracted. The grind still goes coarser since the time ran long, and ${temp} °C is already the max for ${roastLabel}.`,

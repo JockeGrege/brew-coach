@@ -246,8 +246,14 @@ function suggest(recipe, fb, T) {
   let ratio = recipe.ratio;
   const why = [];
 
-  if (fb.flow === "slow") grind = 1;
-  if (fb.flow === "fast") grind = -1;
+  // If the brewer already hand-adjusted the grind themselves, don't also
+  // recommend a grind change on top of that — just note it happened.
+  if (!fb.grindAdjusted) {
+    if (fb.flow === "slow") grind = 1;
+    if (fb.flow === "fast") grind = -1;
+  } else if (fb.flow === "slow" || fb.flow === "fast") {
+    why.push(T.suggest.grindAlreadyAdjusted);
+  }
 
   if (fb.taste === "sour") {
     if (grind === 1) {
@@ -461,6 +467,66 @@ function ConfirmDialog({ message, confirmLabel, cancelLabel, danger, onConfirm, 
           <Button variant="quiet" onClick={onCancel}>
             {cancelLabel}
           </Button>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
+function EditFeedbackDialog({ T, fb, setFb, onSave, onCancel }) {
+  return (
+    <div
+      style={{
+        position: "fixed",
+        inset: 0,
+        background: "rgba(0,0,0,0.45)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: 16,
+        zIndex: 10,
+        overflowY: "auto",
+      }}
+      onClick={onCancel}
+    >
+      <div style={{ width: "100%", maxWidth: 380 }} onClick={(e) => e.stopPropagation()}>
+        <Card>
+          <h2 style={{ fontFamily: F.display, fontSize: 20, margin: "0 0 14px", fontWeight: 400 }}>{T.home.editFeedback}</h2>
+
+          <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.feedback.taste}</div>
+          {Object.entries(T.taste).map(([k, l]) => (
+            <Choice key={k} label={l[0].toUpperCase() + l.slice(1)} selected={fb.taste === k} onClick={() => setFb((f) => ({ ...f, taste: k }))} />
+          ))}
+
+          <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.timeAndFlow}</div>
+          {Object.entries(T.flow).map(([k, l]) => (
+            <Choice
+              key={k}
+              label={k === "slow" ? T.feedback.wentSlow : k === "fast" ? T.feedback.wentFast : T.feedback.goodTime}
+              sub={T.feedback.clockSays(l)}
+              selected={fb.flow === k}
+              onClick={() => setFb((f) => ({ ...f, flow: k }))}
+            />
+          ))}
+
+          <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
+          <textarea
+            value={fb.comment}
+            onChange={(e) => setFb((f) => ({ ...f, comment: e.target.value }))}
+            rows={3}
+            placeholder={T.feedback.notePlaceholder}
+            style={{ width: "100%", padding: 12, fontSize: 14, border: `1px solid ${C.line}`, borderRadius: 3, background: C.card, color: C.ink, resize: "vertical", boxSizing: "border-box" }}
+          />
+
+          <div style={{ marginTop: 20 }}>
+            <Button onClick={onSave} disabled={!fb.taste || !fb.flow}>
+              {T.feedback.save}
+            </Button>
+            <div style={{ height: 8 }} />
+            <Button variant="quiet" onClick={onCancel}>
+              {T.confirm.cancel}
+            </Button>
+          </div>
         </Card>
       </div>
     </div>
@@ -748,6 +814,11 @@ export default function ChemexBrewCoach() {
   const [fb, setFb] = useState({ taste: null, flow: null, comment: "" });
   const [actual, setActual] = useState(0);
   const [result, setResult] = useState(null);
+  // Editing a past brew's taste answer (from Home's latest-brew card, or a
+  // pending "svara senare" review) — separate from the live `fb`/`recipe`
+  // state, which belongs to the brew actually in progress right now.
+  const [editingBrew, setEditingBrew] = useState(null);
+  const [editFb, setEditFb] = useState({ taste: null, flow: null, comment: "" });
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const [autoAdvancePending, setAutoAdvancePending] = useState(false);
@@ -1088,6 +1159,22 @@ export default function ChemexBrewCoach() {
     goTo("setup");
   }
 
+  // "Ny bryggning från noll" starts over completely — worth confirming when
+  // there's an unfinished brew for this method, since it'll be left behind.
+  function startNewFromZero() {
+    const goFresh = () => openSetup({ grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp });
+    if (inProgress) {
+      setConfirmAction({
+        message: T.confirm.startNewWhileInProgress,
+        confirmLabel: T.home.newFromZero,
+        danger: true,
+        onConfirm: goFresh,
+      });
+    } else {
+      goFresh();
+    }
+  }
+
   function toRecipe() {
     const dose = cfg.inputMode === "dose" ? cfg.dose : doseFromCups(cfg.cups, cfg.ratio);
     const r = buildRecipe(activeMethod, { ...cfg, dose }, T);
@@ -1123,8 +1210,13 @@ export default function ChemexBrewCoach() {
     setStepIndex((i) => i + 1);
   }
 
-  async function saveFeedback() {
-    const s = suggest(recipe, fb, T);
+  async function saveFeedback(pending) {
+    // "Svara senare": skip taste for now — flow/time feedback (already set
+    // automatically when the brew finished) still drives a partial
+    // suggestion, and the pending flag lets Home/History prompt for the
+    // taste answer later via editFeedback().
+    const fbToSave = pending ? { ...fb, taste: null, pending: true } : { ...fb, pending: false };
+    const s = suggest(recipe, fbToSave, T);
     const brew = {
       id: `${Date.now()}`,
       date: new Date().toISOString(),
@@ -1141,14 +1233,47 @@ export default function ChemexBrewCoach() {
       restDays: recipe.rest ? recipe.rest.days : null,
       targetTime: fmt(recipe.target),
       actualTime: fmt(actual),
-      feedback: { ...fb },
+      feedback: fbToSave,
       suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio },
     };
     setResult({ recipe, s });
     clearInProgress(recipe.method);
     setInProgress(null);
     await persist([brew, ...brews].slice(0, 60));
-    goTo("next");
+    goTo(pending ? "home" : "next");
+  }
+
+  function editFeedback(brew) {
+    setEditingBrew(brew);
+    setEditFb({
+      taste: brew.feedback.taste,
+      flow: brew.feedback.flow,
+      comment: brew.feedback.comment || "",
+      grindAdjusted: brew.feedback.grindAdjusted || false,
+    });
+  }
+
+  async function saveEditFeedback() {
+    // rest (roast-freshness data) isn't stored on a saved brew, so the
+    // freshness-aware override in suggest() simply won't re-fire here —
+    // acceptable for a retroactive edit.
+    const pseudoRecipe = {
+      method: editingBrew.method,
+      roast: editingBrew.roast,
+      grindOffset: editingBrew.grindOffset,
+      temperature: editingBrew.temperature,
+      ratio: editingBrew.ratio,
+      rest: null,
+    };
+    const s = suggest(pseudoRecipe, editFb, T);
+    await persist(
+      brews.map((b) =>
+        b.id === editingBrew.id
+          ? { ...b, feedback: { ...editFb, pending: false }, suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio } }
+          : b
+      )
+    );
+    setEditingBrew(null);
   }
 
   const poured = (() => {
@@ -1193,6 +1318,9 @@ export default function ChemexBrewCoach() {
           }}
           onCancel={() => setConfirmAction(null)}
         />
+      )}
+      {editingBrew && (
+        <EditFeedbackDialog T={T} fb={editFb} setFb={setEditFb} onSave={saveEditFeedback} onCancel={() => setEditingBrew(null)} />
       )}
       {showSources && (
         <SourcesDialog
@@ -1371,17 +1499,36 @@ export default function ChemexBrewCoach() {
               <Card style={{ padding: 0, overflow: "hidden" }}>
                 <div style={{ display: "flex", gap: 4, padding: "20px 18px 8px" }}>
                   <div style={{ flex: 1 }}>
-                    <Eyebrow>
-                      {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
-                      {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
-                    </Eyebrow>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 8 }}>
+                      <Eyebrow>
+                        {last ? T.home.lastBrewEyebrow : T.home.noneEyebrow}
+                        {last && ` · ${new Date(last.date).toLocaleDateString(T.locale, { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}`}
+                      </Eyebrow>
+                      {last && (
+                        <button
+                          className="cbc-btn"
+                          onClick={() => editFeedback(last)}
+                          aria-label={T.home.editFeedback}
+                          style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0 }}
+                        >
+                          {T.home.editFeedback}
+                        </button>
+                      )}
+                    </div>
                     {last ? (
                       <>
                         <div style={{ fontFamily: F.display, fontSize: 26, lineHeight: 1.15, marginTop: 10 }}>
                           {T.roasts[last.roast].label}
-                          <br />
-                          {T.home.becamePrefix} {T.taste[last.feedback.taste]}
+                          {last.feedback.taste ? (
+                            <>
+                              <br />
+                              {T.home.becamePrefix} {T.taste[last.feedback.taste]}
+                            </>
+                          ) : null}
                         </div>
+                        {last.feedback.pending && (
+                          <div style={{ fontSize: 13, color: C.hot, marginTop: 6 }}>{T.home.tastePending}</div>
+                        )}
                         <div style={{ fontFamily: F.mono, fontSize: 12.5, color: C.ink2, marginTop: 12, lineHeight: 1.7 }}>
                           {last.coffeeDose} g · {last.water} g · 1:{last.ratio}
                           <br />
@@ -1434,7 +1581,7 @@ export default function ChemexBrewCoach() {
                         {T.home.continueFromLast}
                       </Button>
                       <div style={{ height: 8 }} />
-                      <Button variant="quiet" onClick={() => openSetup({ grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp })}>
+                      <Button variant="quiet" onClick={() => startNewFromZero()}>
                         {T.home.newFromZero}
                       </Button>
                     </>
@@ -1764,6 +1911,11 @@ export default function ChemexBrewCoach() {
               />
             ))}
 
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, margin: "18px 0 8px" }}>
+              <span style={{ fontSize: 13, color: C.ink2 }}>{T.feedback.grindAdjusted}</span>
+              <Toggle checked={!!fb.grindAdjusted} onChange={() => setFb((f) => ({ ...f, grindAdjusted: !f.grindAdjusted }))} />
+            </div>
+
             <div style={{ fontSize: 13, color: C.ink2, margin: "18px 0 8px" }}>{T.feedback.noteLabel}</div>
             <textarea
               value={fb.comment}
@@ -1774,12 +1926,15 @@ export default function ChemexBrewCoach() {
             />
 
             <div style={{ marginTop: 20 }}>
-              <Button onClick={saveFeedback} disabled={!fb.taste || !fb.flow}>
+              <Button onClick={() => saveFeedback(false)} disabled={!fb.taste || !fb.flow}>
                 {T.feedback.save}
               </Button>
               {(!fb.taste || !fb.flow) && (
                 <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8, textAlign: "center" }}>{T.feedback.pickBoth}</div>
               )}
+              <Button variant="plain" onClick={() => saveFeedback(true)} style={{ marginTop: 6 }}>
+                {T.feedback.answerLater}
+              </Button>
             </div>
           </Card>
         )}
@@ -1876,13 +2031,45 @@ export default function ChemexBrewCoach() {
                   {b.restDays != null ? T.history.offRoastSuffix(b.restDays) : ""}
                 </div>
                 <div style={{ fontSize: 13.5, color: C.ink, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.line}`, lineHeight: 1.5 }}>
-                  {T.history.became} {T.taste[b.feedback.taste]}, {T.flow[b.feedback.flow]}.
-                  {b.feedback.comment ? ` ”${b.feedback.comment}”` : ""}
+                  {b.feedback.taste ? (
+                    <>
+                      {T.history.became} {T.taste[b.feedback.taste]}, {T.flow[b.feedback.flow]}.
+                      {b.feedback.comment ? ` ”${b.feedback.comment}”` : ""}
+                    </>
+                  ) : (
+                    <span style={{ color: C.hot }}>{T.home.tastePending}</span>
+                  )}
                 </div>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginTop: 6 }}>
-                  <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5 }}>
-                    {T.history.next} {grindNote(b.method || "chemex", b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
-                  </div>
+                <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5, marginTop: 6 }}>
+                  {T.history.next} {grindNote(b.method || "chemex", b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                </div>
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, marginTop: 8 }}>
+                  <button
+                    className="cbc-btn"
+                    onClick={() =>
+                      setConfirmAction({
+                        message: T.confirm.continueFromHistory,
+                        confirmLabel: T.history.continueFromThis,
+                        onConfirm: () =>
+                          openSetup(
+                            {
+                              roast: b.roast,
+                              inputMode: "dose",
+                              dose: b.coffeeDose,
+                              ratio: b.suggestedNext.ratio,
+                              temperature: b.suggestedNext.temperature,
+                              grindOffset: b.suggestedNext.grindOffset,
+                              roastDate: b.roastDate || null,
+                              bestBefore: b.bestBefore || null,
+                            },
+                            b.method || "chemex"
+                          ),
+                      })
+                    }
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0 }}
+                  >
+                    {T.history.continueFromThis}
+                  </button>
                   <button
                     className="cbc-btn"
                     onClick={() =>
@@ -1893,7 +2080,7 @@ export default function ChemexBrewCoach() {
                         onConfirm: () => removeBrew(b.id),
                       })
                     }
-                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0, marginLeft: 10 }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontFamily: F.mono, fontSize: 11, color: C.ink3, flexShrink: 0 }}
                   >
                     {T.history.remove}
                   </button>
