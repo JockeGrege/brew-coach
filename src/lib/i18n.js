@@ -101,7 +101,7 @@ const sv = {
   feedback: {
     step: "Steg 3 av 3 · Efter bryggningen",
     heading: "Hur blev den?",
-    meta: (dose, ratio, temp, actual, target) => `${dose} g · 1:${ratio} · ${temp} °C · ${actual} mot mål ${target}`,
+    meta: (dose, ratio, temp, actual, targetLo, targetHi) => `${dose} g · 1:${ratio} · ${temp} °C · ${actual} mot mål ${targetLo}–${targetHi}`,
     taste: "Smak",
     timeAndFlow: "Tid och flöde",
     wentSlow: "Gick långsamt",
@@ -414,7 +414,7 @@ const en = {
   feedback: {
     step: "Step 3 of 3 · After brewing",
     heading: "How did it turn out?",
-    meta: (dose, ratio, temp, actual, target) => `${dose} g · 1:${ratio} · ${temp} °C · ${actual} vs target ${target}`,
+    meta: (dose, ratio, temp, actual, targetLo, targetHi) => `${dose} g · 1:${ratio} · ${temp} °C · ${actual} vs target ${targetLo}–${targetHi}`,
     taste: "Taste",
     timeAndFlow: "Time and flow",
     wentSlow: "Ran slow",
