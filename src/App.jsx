@@ -59,6 +59,15 @@ function grindNote(methodKey, roastKey, offset, T) {
   return T.grindNote(base, steps, dir);
 }
 
+// The single adjustment a suggestion actually makes relative to the last
+// brew's own grind — not grindNote()'s cumulative offset from the method's
+// base grind, which reads as confusing outside the just-finished-a-brew
+// summary it was designed for (e.g. "2 steps finer" when only this one
+// suggestion moved it 1 step).
+function grindStepNote(step, T) {
+  return step ? T.next.grindStep(step > 0 ? T.next.coarser : T.next.finer) : T.next.unchanged;
+}
+
 function doseFromCups(cups, ratio) {
   // ~170 ml färdigt kaffe per kopp. Bädden håller kvar ca 2 g vatten per g kaffe.
   return clamp(Math.round((cups * 170) / (ratio - 2)), 12, 90);
@@ -1243,7 +1252,7 @@ export default function ChemexBrewCoach() {
       targetTime: fmt(recipe.target),
       actualTime: fmt(actual),
       feedback: fbToSave,
-      suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio },
+      suggestedNext: { grindOffset: s.grindOffset, grindStep: s.grindStep, temperature: s.temperature, ratio: s.ratio },
     };
     setResult({ recipe, s });
     clearInProgress(recipe.method);
@@ -1279,7 +1288,7 @@ export default function ChemexBrewCoach() {
     const updated = {
       ...editingBrew,
       feedback: { ...editFb, pending: false },
-      suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio },
+      suggestedNext: { grindOffset: s.grindOffset, grindStep: s.grindStep, temperature: s.temperature, ratio: s.ratio },
     };
     await persist(brews.map((b) => (b.id === editingBrew.id ? updated : b)));
     setEditingBrew(null);
@@ -1590,7 +1599,7 @@ export default function ChemexBrewCoach() {
                     <>
                       <div style={{ fontSize: 14, lineHeight: 1.55, color: C.ink2, borderTop: `1px solid ${C.line}`, paddingTop: 14, marginBottom: 14 }}>
                         {T.home.lastSuggestion(
-                          grindNote(last.method || "chemex", last.roast, last.suggestedNext.grindOffset, T).toLowerCase(),
+                          grindStepNote(last.suggestedNext.grindStep ?? 0, T).toLowerCase(),
                           last.suggestedNext.temperature,
                           last.suggestedNext.ratio
                         )}
@@ -2082,7 +2091,7 @@ export default function ChemexBrewCoach() {
                   )}
                 </div>
                 <div style={{ fontSize: 13, color: C.ink2, lineHeight: 1.5, marginTop: 6 }}>
-                  {T.history.next} {grindNote(b.method || "chemex", b.roast, b.suggestedNext.grindOffset, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
+                  {T.history.next} {grindStepNote(b.suggestedNext.grindStep ?? 0, T).toLowerCase()}, {b.suggestedNext.temperature} °C, 1:{b.suggestedNext.ratio}.
                 </div>
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: 16, marginTop: 8 }}>
                   <button
