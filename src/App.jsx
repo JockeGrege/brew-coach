@@ -838,10 +838,6 @@ export default function ChemexBrewCoach() {
   // state, which belongs to the brew actually in progress right now.
   const [editingBrew, setEditingBrew] = useState(null);
   const [editFb, setEditFb] = useState({ taste: null, flow: null, comment: "" });
-  // Set when "Fortsätt från förra" is used on a brew with a pending taste
-  // review — the review has to be filled in before continuing is allowed,
-  // so saving the edit then proceeds straight into Setup afterward.
-  const [continueAfterEdit, setContinueAfterEdit] = useState(false);
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const [autoAdvancePending, setAutoAdvancePending] = useState(false);
@@ -1304,7 +1300,7 @@ export default function ChemexBrewCoach() {
     goTo(pending ? "home" : "next");
   }
 
-  function editFeedback(brew, continueAfter) {
+  function editFeedback(brew) {
     setEditingBrew(brew);
     setEditFb({
       taste: brew.feedback.taste,
@@ -1316,7 +1312,6 @@ export default function ChemexBrewCoach() {
       missSeconds: brew.feedback.missSeconds || 0,
       windowWidth: brew.feedback.windowWidth || 0,
     });
-    setContinueAfterEdit(!!continueAfter);
   }
 
   async function saveEditFeedback() {
@@ -1326,9 +1321,12 @@ export default function ChemexBrewCoach() {
     const pseudoRecipe = {
       method: editingBrew.method,
       roast: editingBrew.roast,
+      dose: editingBrew.coffeeDose,
       grindOffset: editingBrew.grindOffset,
       temperature: editingBrew.temperature,
       ratio: editingBrew.ratio,
+      roastDate: editingBrew.roastDate || null,
+      bestBefore: editingBrew.bestBefore || null,
       rest: null,
     };
     const s = suggest(pseudoRecipe, editFb, T);
@@ -1339,22 +1337,12 @@ export default function ChemexBrewCoach() {
     };
     await persist(brews.map((b) => (b.id === editingBrew.id ? updated : b)));
     setEditingBrew(null);
-    if (continueAfterEdit) {
-      setContinueAfterEdit(false);
-      openSetup(
-        {
-          roast: updated.roast,
-          inputMode: "dose",
-          dose: updated.coffeeDose,
-          ratio: updated.suggestedNext.ratio,
-          temperature: updated.suggestedNext.temperature,
-          grindOffset: updated.suggestedNext.grindOffset,
-          roastDate: updated.roastDate || null,
-          bestBefore: updated.bestBefore || null,
-        },
-        updated.method || "chemex"
-      );
-    }
+    // Land on the same "here's how to adjust" screen a live brew ends on,
+    // rather than jumping straight into a new setup — the suggestion was
+    // just recomputed from the edited answer, so it deserves the same
+    // review-then-confirm step ("Använd förslaget") before it's applied.
+    setResult({ recipe: pseudoRecipe, s });
+    goTo("next");
   }
 
   const poured = (() => {
@@ -1412,10 +1400,7 @@ export default function ChemexBrewCoach() {
           fb={editFb}
           setFb={setEditFb}
           onSave={saveEditFeedback}
-          onCancel={() => {
-            setEditingBrew(null);
-            setContinueAfterEdit(false);
-          }}
+          onCancel={() => setEditingBrew(null)}
         />
       )}
       {showSources && (
@@ -1663,7 +1648,7 @@ export default function ChemexBrewCoach() {
                             // Can't continue from a suggestion that hasn't
                             // actually been computed from a real taste
                             // answer yet — fill that in first.
-                            editFeedback(last, true);
+                            editFeedback(last);
                             return;
                           }
                           openSetup(
