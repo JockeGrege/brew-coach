@@ -997,6 +997,10 @@ export default function ChemexBrewCoach() {
   // to the other method untouched.
   async function clearAllBrews() {
     await persist(brews.filter((b) => (b.method || "chemex") !== method));
+    // With no brews left, a remembered "grinder confirmed at offset N"
+    // no longer means anything — without this, the Recipe screen's gate
+    // would keep comparing against a setting from history that's gone.
+    unconfirmGrindOffset(method);
   }
 
   /* Klocka */
@@ -1685,7 +1689,11 @@ export default function ChemexBrewCoach() {
                       </Button>
                     </>
                   ) : (
-                    <Button onClick={() => openSetup({})}>{T.home.newBrew}</Button>
+                    // No brew to continue from, so this is always "from
+                    // scratch" — reuses the same reset as newFromZero
+                    // rather than leaving cfg.grindOffset at whatever a
+                    // now-deleted brew's suggestion last left it at.
+                    <Button onClick={() => startNewFromZero()}>{T.home.newBrew}</Button>
                   )}
                 </div>
               </Card>
