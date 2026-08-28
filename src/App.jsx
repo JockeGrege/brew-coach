@@ -819,6 +819,10 @@ export default function ChemexBrewCoach() {
   // state, which belongs to the brew actually in progress right now.
   const [editingBrew, setEditingBrew] = useState(null);
   const [editFb, setEditFb] = useState({ taste: null, flow: null, comment: "" });
+  // Set when "Fortsätt från förra" is used on a brew with a pending taste
+  // review — the review has to be filled in before continuing is allowed,
+  // so saving the edit then proceeds straight into Setup afterward.
+  const [continueAfterEdit, setContinueAfterEdit] = useState(false);
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
   const [autoAdvancePending, setAutoAdvancePending] = useState(false);
@@ -1243,7 +1247,7 @@ export default function ChemexBrewCoach() {
     goTo(pending ? "home" : "next");
   }
 
-  function editFeedback(brew) {
+  function editFeedback(brew, continueAfter) {
     setEditingBrew(brew);
     setEditFb({
       taste: brew.feedback.taste,
@@ -1251,6 +1255,7 @@ export default function ChemexBrewCoach() {
       comment: brew.feedback.comment || "",
       grindAdjusted: brew.feedback.grindAdjusted || false,
     });
+    setContinueAfterEdit(!!continueAfter);
   }
 
   async function saveEditFeedback() {
@@ -1266,14 +1271,29 @@ export default function ChemexBrewCoach() {
       rest: null,
     };
     const s = suggest(pseudoRecipe, editFb, T);
-    await persist(
-      brews.map((b) =>
-        b.id === editingBrew.id
-          ? { ...b, feedback: { ...editFb, pending: false }, suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio } }
-          : b
-      )
-    );
+    const updated = {
+      ...editingBrew,
+      feedback: { ...editFb, pending: false },
+      suggestedNext: { grindOffset: s.grindOffset, temperature: s.temperature, ratio: s.ratio },
+    };
+    await persist(brews.map((b) => (b.id === editingBrew.id ? updated : b)));
     setEditingBrew(null);
+    if (continueAfterEdit) {
+      setContinueAfterEdit(false);
+      openSetup(
+        {
+          roast: updated.roast,
+          inputMode: "dose",
+          dose: updated.coffeeDose,
+          ratio: updated.suggestedNext.ratio,
+          temperature: updated.suggestedNext.temperature,
+          grindOffset: updated.suggestedNext.grindOffset,
+          roastDate: updated.roastDate || null,
+          bestBefore: updated.bestBefore || null,
+        },
+        updated.method || "chemex"
+      );
+    }
   }
 
   const poured = (() => {
@@ -1320,7 +1340,16 @@ export default function ChemexBrewCoach() {
         />
       )}
       {editingBrew && (
-        <EditFeedbackDialog T={T} fb={editFb} setFb={setEditFb} onSave={saveEditFeedback} onCancel={() => setEditingBrew(null)} />
+        <EditFeedbackDialog
+          T={T}
+          fb={editFb}
+          setFb={setEditFb}
+          onSave={saveEditFeedback}
+          onCancel={() => {
+            setEditingBrew(null);
+            setContinueAfterEdit(false);
+          }}
+        />
       )}
       {showSources && (
         <SourcesDialog
@@ -1562,7 +1591,14 @@ export default function ChemexBrewCoach() {
                         )}
                       </div>
                       <Button
-                        onClick={() =>
+                        onClick={() => {
+                          if (last.feedback.pending) {
+                            // Can't continue from a suggestion that hasn't
+                            // actually been computed from a real taste
+                            // answer yet — fill that in first.
+                            editFeedback(last, true);
+                            return;
+                          }
                           openSetup(
                             {
                               roast: last.roast,
@@ -1575,8 +1611,8 @@ export default function ChemexBrewCoach() {
                               bestBefore: last.bestBefore || null,
                             },
                             last.method || "chemex"
-                          )
-                        }
+                          );
+                        }}
                       >
                         {T.home.continueFromLast}
                       </Button>
