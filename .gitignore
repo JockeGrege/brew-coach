@@ -3,7 +3,7 @@ dist
 dist-ssr
 *.local
 .firebase
-
+docs/
 .env
 .env.local
 
@@ -11,3 +11,5 @@ dist-ssr
 *.log
 
 docs/PROJECT_MAINTENANCE_GUIDE.md
+
+showcase/
