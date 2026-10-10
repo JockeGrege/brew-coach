@@ -684,10 +684,10 @@ function declutterMarks(marks, water, top, bottom) {
 /* Signaturen: bryggarens silhuett som nivåmätare med gramskala. Formen och
    dekoren (Chemex-krage, V60-ribbor, ...) kommer från method.gauge, så nya
    metoder ritar sig själva utan att röra den här komponenten. */
-function BrewGauge({ methodKey, recipe, poured }) {
+function BrewGauge({ methodKey, recipe, fillTo }) {
   const g = METHODS[methodKey].gauge;
   const mx = g.marksX || { tick1: 84, tick2: 96, label: 100 };
-  const frac = clamp(poured / recipe.water, 0, 1);
+  const frac = clamp(fillTo / recipe.water, 0, 1);
   const fillY = g.bottom - frac * (g.bottom - g.top);
   const marks = [{ g: recipe.bloom, l: "bloom" }, ...recipe.pours.map((v, i) => ({ g: v, l: String(i + 1) }))];
   return (
@@ -726,8 +726,8 @@ function BrewGauge({ methodKey, recipe, poured }) {
       )}
       {declutterMarks(marks, recipe.water, g.top, g.bottom).map((m) => (
         <g key={m.l}>
-          <line x1={mx.tick1} y1={m.y} x2={mx.tick2} y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
-          <text x={mx.label} y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
+          <line x1={mx.tick1} y1={m.y} x2={mx.tick2} y2={m.y} stroke={fillTo >= m.g ? C.ink : C.line} strokeWidth="1" />
+          <text x={mx.label} y={m.y + 3.5} fill={fillTo >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
             {m.g} g
           </text>
         </g>
@@ -1385,10 +1385,12 @@ export default function ChemexBrewCoach() {
     goTo("next");
   }
 
-  const poured = (() => {
+  // The gauge shows what to pour *up to* in the current step, so the current
+  // step's target counts; untargeted steps (rinse, grind) keep the previous one.
+  const pourTarget = (() => {
     if (!recipe) return 0;
-    const done = steps.slice(0, stepIndex).filter((s) => s.target);
-    return done.length ? done[done.length - 1].target : 0;
+    const upto = steps.slice(0, stepIndex + 1).filter((s) => s.target);
+    return upto.length ? upto[upto.length - 1].target : 0;
   })();
 
   // What the grinder is assumed to actually be set to right now: whatever
@@ -1410,10 +1412,10 @@ export default function ChemexBrewCoach() {
       ? C.warn
       : C.ink;
 
-  const inProgressPoured = (() => {
+  const inProgressPourTarget = (() => {
     if (!inProgress) return 0;
-    const done = inProgress.steps.slice(0, inProgress.stepIndex).filter((s) => s.target);
-    return done.length ? done[done.length - 1].target : 0;
+    const upto = inProgress.steps.slice(0, inProgress.stepIndex + 1).filter((s) => s.target);
+    return upto.length ? upto[upto.length - 1].target : 0;
   })();
 
   /* ------------------------------------------------------------------ */
@@ -1604,7 +1606,7 @@ export default function ChemexBrewCoach() {
                     </div>
                   </div>
                   <div style={{ marginTop: -6, marginRight: -12 }}>
-                    <BrewGauge methodKey={inProgress.recipe.method} recipe={inProgress.recipe} poured={inProgressPoured} />
+                    <BrewGauge methodKey={inProgress.recipe.method} recipe={inProgress.recipe} fillTo={inProgressPourTarget} />
                   </div>
                 </div>
                 <div style={{ padding: "10px 18px 18px" }}>
@@ -1668,7 +1670,7 @@ export default function ChemexBrewCoach() {
                           ? { water: last.water, bloom: last.coffeeDose * 2, pours: METHODS[last.method || "chemex"].pours(last.coffeeDose * 2, last.water) }
                           : { water: 480, bloom: 60, pours: activeMethod.pours(60, 480) }
                       }
-                      poured={last ? last.water : 0}
+                      fillTo={last ? last.water : 0}
                     />
                   </div>
                 </div>
@@ -1939,7 +1941,7 @@ export default function ChemexBrewCoach() {
             <Card style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <div style={{ marginLeft: -8, marginTop: -4 }}>
-                  <BrewGauge methodKey={recipe.method} recipe={recipe} poured={poured} />
+                  <BrewGauge methodKey={recipe.method} recipe={recipe} fillTo={pourTarget} />
                 </div>
                 <div style={{ flex: 1, paddingTop: 4 }}>
                   <Eyebrow>{T.brewScreen.clock}</Eyebrow>
