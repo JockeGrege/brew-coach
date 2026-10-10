@@ -79,6 +79,9 @@ function doseFromCups(cups, ratio) {
    raderingen är permanent och sker utan förvarning, varnar hemskärmen aktivt
    den sista veckan innan den skulle inträffa, i stället för att bara nämna
    "skapa ett konto" som en trevlig idé. */
+// How long the finish button on the last step stays disabled, so the tap that
+// advanced to it can't also finish the brew.
+const FINISH_LOCK_MS = 5000;
 const GUEST_CLEANUP_DAYS = 30;
 const GUEST_CLEANUP_WARNING_DAYS = 7;
 
@@ -858,6 +861,7 @@ export default function ChemexBrewCoach() {
   const [recipe, setRecipe] = useState(null);
   const [steps, setSteps] = useState([]);
   const [stepIndex, setStepIndex] = useState(0);
+  const [finishLocked, setFinishLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
   const [fb, setFb] = useState({ taste: null, flow: null, comment: "" });
@@ -1047,6 +1051,19 @@ export default function ChemexBrewCoach() {
       autoAdvanceTimer.current = null;
     }
   }, [stepIndex]);
+
+  // Entering the last step locks the finish button briefly (wall-clock, so it
+  // also holds when the brew clock is paused or the brew was just resumed).
+  useEffect(() => {
+    const onLastStep = screen === "brew" && steps.length > 0 && stepIndex === steps.length - 1;
+    if (!onLastStep) {
+      setFinishLocked(false);
+      return;
+    }
+    setFinishLocked(true);
+    const t = setTimeout(() => setFinishLocked(false), FINISH_LOCK_MS);
+    return () => clearTimeout(t);
+  }, [stepIndex, screen, steps.length]);
 
   // Pausing the clock cancels a pending auto-advance rather than letting it
   // fire while the brewer isn't actually watching the timer.
@@ -1409,6 +1426,7 @@ export default function ChemexBrewCoach() {
   // auto-advance) moves on from it: the user must press the button themselves.
   const needsManualAdvance =
     !!steps[stepIndex]?.target && steps[stepIndex].at !== undefined && steps[stepIndex + 1] && steps[stepIndex + 1].at === undefined;
+  const isFinishLocked = finishLocked && stepIndex === steps.length - 1;
   const clockColor =
     (recipe && elapsed > recipe.targetHi) || (timeToNextStep !== null && timeToNextStep <= 0)
       ? C.hot
@@ -2014,7 +2032,11 @@ export default function ChemexBrewCoach() {
                 </div>
               )}
 
-              <Button onClick={nextStep} className={autoAdvancePending ? "cbc-pulse" : ""}>
+              {isFinishLocked && (
+                <p style={{ fontSize: 12.5, color: C.ink3, margin: "0 0 10px", lineHeight: 1.5 }}>{T.brewScreen.finishLockedHint}</p>
+              )}
+
+              <Button onClick={nextStep} disabled={isFinishLocked} className={autoAdvancePending ? "cbc-pulse" : ""}>
                 {autoAdvancePending
                   ? T.brewScreen.advancingSoon
                   : stepIndex === steps.length - 1

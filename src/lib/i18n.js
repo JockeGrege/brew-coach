@@ -98,6 +98,7 @@ const sv = {
     advancingSoon: "Går vidare …",
     manualAdvanceHint: "Det här steget går inte vidare av sig självt. När du hällt upp till målet, tryck på knappen nedan för att gå vidare till nästa steg.",
     nextStepPoured: "Jag har hällt klart – nästa steg",
+    finishLockedHint: "Knappen låses upp om en stund så att du inte trycker på den av misstag.",
   },
 
   feedback: {
@@ -413,6 +414,7 @@ const en = {
     advancingSoon: "Advancing …",
     manualAdvanceHint: "This step won't advance on its own. Once you've poured up to the target, press the button below to move on to the next step.",
     nextStepPoured: "I've finished pouring – next step",
+    finishLockedHint: "The button unlocks in a moment so you don't tap it by accident.",
   },
 
   feedback: {
