@@ -106,9 +106,14 @@ const REST_WINDOWS = {
 
 function daysSinceRoast(iso) {
   if (!iso) return null;
-  const d = new Date(`${iso}T12:00:00`);
-  if (isNaN(d.getTime())) return null;
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const [y, m, d] = iso.split("-").map(Number);
+  const roast = new Date(y, m - 1, d);
+  if (isNaN(roast.getTime())) return null;
+  // Whole calendar days in local time, so the count flips at midnight rather
+  // than 24 h after some arbitrary time of day. Round absorbs 23/25 h DST days.
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today - roast) / 86400000);
   return days < 0 || days > 400 ? null : days;
 }
 
