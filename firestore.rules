@@ -2,8 +2,15 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // One document per user: { brews: [...] }, history capped at 60 entries
+    // (see src/lib/brews.js). Anything else is rejected so a throwaway
+    // account can't use the document as free storage.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if request.auth != null && request.auth.uid == uid
+        && request.resource.data.keys().hasOnly(['brews'])
+        && request.resource.data.brews is list
+        && request.resource.data.brews.size() <= 60;
     }
   }
 }
