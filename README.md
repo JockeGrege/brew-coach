@@ -37,9 +37,9 @@ Sign-in (Google or anonymous guest) and brew history sync use Firebase (Authenti
 
 ### Abuse protection (App Check)
 
-The Firebase web config is public, so anyone can script anonymous sign-ups. [App Check](https://firebase.google.com/docs/app-check) with reCAPTCHA v3 makes Firebase reject requests that don't come from this app:
+The Firebase web config is public, so anyone can script anonymous sign-ups. [App Check](https://firebase.google.com/docs/app-check) with reCAPTCHA Enterprise makes Firebase reject requests that don't come from this app:
 
-1. Create a reCAPTCHA v3 site key for your GitHub Pages domain (and `localhost`), then register it under **Firebase console → App Check → Apps**.
+1. Create a score-based reCAPTCHA Enterprise site key (Web, with your GitHub Pages domain and `localhost`) in the Google Cloud console for the Firebase project, then register it under **Firebase console → App Check → Apps**.
 2. Set `VITE_RECAPTCHA_SITE_KEY` in `.env` and as a GitHub Actions secret. Without it the app skips App Check, so local dev still works.
 3. Deploy, watch the App Check metrics while unenforced, then enforce for **Authentication** and **Cloud Firestore**. Enforcing before the new build is live locks out existing users.
 4. For local dev with enforcement on, run `npm run dev`, copy the debug token printed in the browser console, and add it under App Check → Manage debug tokens.
