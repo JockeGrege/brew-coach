@@ -74,14 +74,15 @@ function doseFromCups(cups, ratio) {
   return clamp(Math.round((cups * 170) / (ratio - 2)), 12, 90);
 }
 
+// How long the finish button on the last step stays disabled, so the tap that
+// advanced to it can't also finish the brew.
+const FINISH_LOCK_MS = 5000;
+
 /* Firebase raderar tysta, inaktiva gästkonton efter GUEST_CLEANUP_DAYS dagar
    (satt i Firebase Console — håll den här synkad med det värdet). Eftersom
    raderingen är permanent och sker utan förvarning, varnar hemskärmen aktivt
    den sista veckan innan den skulle inträffa, i stället för att bara nämna
    "skapa ett konto" som en trevlig idé. */
-// How long the finish button on the last step stays disabled, so the tap that
-// advanced to it can't also finish the brew.
-const FINISH_LOCK_MS = 5000;
 const GUEST_CLEANUP_DAYS = 30;
 const GUEST_CLEANUP_WARNING_DAYS = 7;
 
