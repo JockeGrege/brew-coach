@@ -96,6 +96,8 @@ const sv = {
     autoAdvance: "Gå vidare automatiskt",
     autoAdvanceHint: "Nästa steg startar av sig själv när tiden är inne.",
     advancingSoon: "Går vidare …",
+    manualAdvanceHint: "Det här steget går inte vidare av sig självt. När du hällt upp till målet, tryck på knappen nedan för att gå vidare till nästa steg.",
+    nextStepPoured: "Jag har hällt klart – nästa steg",
   },
 
   feedback: {
@@ -409,6 +411,8 @@ const en = {
     autoAdvance: "Auto-advance",
     autoAdvanceHint: "The next step will start on its own when it's time.",
     advancingSoon: "Advancing …",
+    manualAdvanceHint: "This step won't advance on its own. Once you've poured up to the target, press the button below to move on to the next step.",
+    nextStepPoured: "I've finished pouring – next step",
   },
 
   feedback: {

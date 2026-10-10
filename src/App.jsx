@@ -1405,6 +1405,10 @@ export default function ChemexBrewCoach() {
   // the plain ink color.
   const nextStepAt = steps[stepIndex + 1]?.at;
   const timeToNextStep = nextStepAt !== undefined ? nextStepAt - elapsed : null;
+  // The last pour is followed by the untimed drawdown, so nothing (not even
+  // auto-advance) moves on from it: the user must press the button themselves.
+  const needsManualAdvance =
+    !!steps[stepIndex]?.target && steps[stepIndex].at !== undefined && steps[stepIndex + 1] && steps[stepIndex + 1].at === undefined;
   const clockColor =
     (recipe && elapsed > recipe.targetHi) || (timeToNextStep !== null && timeToNextStep <= 0)
       ? C.hot
@@ -2004,6 +2008,12 @@ export default function ChemexBrewCoach() {
                 </div>
               )}
 
+              {needsManualAdvance && (
+                <div style={{ background: C.warn + "22", border: `1px solid ${C.warn}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5, color: C.ink }}>
+                  {T.brewScreen.manualAdvanceHint}
+                </div>
+              )}
+
               <Button onClick={nextStep} className={autoAdvancePending ? "cbc-pulse" : ""}>
                 {autoAdvancePending
                   ? T.brewScreen.advancingSoon
@@ -2011,6 +2021,8 @@ export default function ChemexBrewCoach() {
                   ? T.brewScreen.finished
                   : steps[stepIndex].id === "grind"
                   ? T.brewScreen.nextStepStartClock
+                  : needsManualAdvance
+                  ? T.brewScreen.nextStepPoured
                   : T.brewScreen.nextStep}
               </Button>
 
