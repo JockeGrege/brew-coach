@@ -79,6 +79,9 @@ function doseFromCups(cups, ratio) {
    raderingen är permanent och sker utan förvarning, varnar hemskärmen aktivt
    den sista veckan innan den skulle inträffa, i stället för att bara nämna
    "skapa ett konto" som en trevlig idé. */
+// How long the finish button on the last step stays disabled, so the tap that
+// advanced to it can't also finish the brew.
+const FINISH_LOCK_MS = 5000;
 const GUEST_CLEANUP_DAYS = 30;
 const GUEST_CLEANUP_WARNING_DAYS = 7;
 
@@ -103,9 +106,14 @@ const REST_WINDOWS = {
 
 function daysSinceRoast(iso) {
   if (!iso) return null;
-  const d = new Date(`${iso}T12:00:00`);
-  if (isNaN(d.getTime())) return null;
-  const days = Math.floor((Date.now() - d.getTime()) / 86400000);
+  const [y, m, d] = iso.split("-").map(Number);
+  const roast = new Date(y, m - 1, d);
+  if (isNaN(roast.getTime())) return null;
+  // Whole calendar days in local time, so the count flips at midnight rather
+  // than 24 h after some arbitrary time of day. Round absorbs 23/25 h DST days.
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const days = Math.round((today - roast) / 86400000);
   return days < 0 || days > 400 ? null : days;
 }
 
@@ -684,10 +692,10 @@ function declutterMarks(marks, water, top, bottom) {
 /* Signaturen: bryggarens silhuett som nivåmätare med gramskala. Formen och
    dekoren (Chemex-krage, V60-ribbor, ...) kommer från method.gauge, så nya
    metoder ritar sig själva utan att röra den här komponenten. */
-function BrewGauge({ methodKey, recipe, poured }) {
+function BrewGauge({ methodKey, recipe, fillTo }) {
   const g = METHODS[methodKey].gauge;
   const mx = g.marksX || { tick1: 84, tick2: 96, label: 100 };
-  const frac = clamp(poured / recipe.water, 0, 1);
+  const frac = clamp(fillTo / recipe.water, 0, 1);
   const fillY = g.bottom - frac * (g.bottom - g.top);
   const marks = [{ g: recipe.bloom, l: "bloom" }, ...recipe.pours.map((v, i) => ({ g: v, l: String(i + 1) }))];
   return (
@@ -726,8 +734,8 @@ function BrewGauge({ methodKey, recipe, poured }) {
       )}
       {declutterMarks(marks, recipe.water, g.top, g.bottom).map((m) => (
         <g key={m.l}>
-          <line x1={mx.tick1} y1={m.y} x2={mx.tick2} y2={m.y} stroke={poured >= m.g ? C.ink : C.line} strokeWidth="1" />
-          <text x={mx.label} y={m.y + 3.5} fill={poured >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
+          <line x1={mx.tick1} y1={m.y} x2={mx.tick2} y2={m.y} stroke={fillTo >= m.g ? C.ink : C.line} strokeWidth="1" />
+          <text x={mx.label} y={m.y + 3.5} fill={fillTo >= m.g ? C.ink : C.ink3} fontFamily={F.mono} fontSize="9.5">
             {m.g} g
           </text>
         </g>
@@ -858,6 +866,7 @@ export default function ChemexBrewCoach() {
   const [recipe, setRecipe] = useState(null);
   const [steps, setSteps] = useState([]);
   const [stepIndex, setStepIndex] = useState(0);
+  const [finishLocked, setFinishLocked] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [running, setRunning] = useState(false);
   const [fb, setFb] = useState({ taste: null, flow: null, comment: "" });
@@ -1047,6 +1056,19 @@ export default function ChemexBrewCoach() {
       autoAdvanceTimer.current = null;
     }
   }, [stepIndex]);
+
+  // Entering the last step locks the finish button briefly (wall-clock, so it
+  // also holds when the brew clock is paused or the brew was just resumed).
+  useEffect(() => {
+    const onLastStep = screen === "brew" && steps.length > 0 && stepIndex === steps.length - 1;
+    if (!onLastStep) {
+      setFinishLocked(false);
+      return;
+    }
+    setFinishLocked(true);
+    const t = setTimeout(() => setFinishLocked(false), FINISH_LOCK_MS);
+    return () => clearTimeout(t);
+  }, [stepIndex, screen, steps.length]);
 
   // Pausing the clock cancels a pending auto-advance rather than letting it
   // fire while the brewer isn't actually watching the timer.
@@ -1385,10 +1407,12 @@ export default function ChemexBrewCoach() {
     goTo("next");
   }
 
-  const poured = (() => {
+  // The gauge shows what to pour *up to* in the current step, so the current
+  // step's target counts; untargeted steps (rinse, grind) keep the previous one.
+  const pourTarget = (() => {
     if (!recipe) return 0;
-    const done = steps.slice(0, stepIndex).filter((s) => s.target);
-    return done.length ? done[done.length - 1].target : 0;
+    const upto = steps.slice(0, stepIndex + 1).filter((s) => s.target);
+    return upto.length ? upto[upto.length - 1].target : 0;
   })();
 
   // What the grinder is assumed to actually be set to right now: whatever
@@ -1403,6 +1427,11 @@ export default function ChemexBrewCoach() {
   // the plain ink color.
   const nextStepAt = steps[stepIndex + 1]?.at;
   const timeToNextStep = nextStepAt !== undefined ? nextStepAt - elapsed : null;
+  // The last pour is followed by the untimed drawdown, so nothing (not even
+  // auto-advance) moves on from it: the user must press the button themselves.
+  const needsManualAdvance =
+    !!steps[stepIndex]?.target && steps[stepIndex].at !== undefined && steps[stepIndex + 1] && steps[stepIndex + 1].at === undefined;
+  const isFinishLocked = finishLocked && stepIndex === steps.length - 1;
   const clockColor =
     (recipe && elapsed > recipe.targetHi) || (timeToNextStep !== null && timeToNextStep <= 0)
       ? C.hot
@@ -1410,10 +1439,10 @@ export default function ChemexBrewCoach() {
       ? C.warn
       : C.ink;
 
-  const inProgressPoured = (() => {
+  const inProgressPourTarget = (() => {
     if (!inProgress) return 0;
-    const done = inProgress.steps.slice(0, inProgress.stepIndex).filter((s) => s.target);
-    return done.length ? done[done.length - 1].target : 0;
+    const upto = inProgress.steps.slice(0, inProgress.stepIndex + 1).filter((s) => s.target);
+    return upto.length ? upto[upto.length - 1].target : 0;
   })();
 
   /* ------------------------------------------------------------------ */
@@ -1604,7 +1633,7 @@ export default function ChemexBrewCoach() {
                     </div>
                   </div>
                   <div style={{ marginTop: -6, marginRight: -12 }}>
-                    <BrewGauge methodKey={inProgress.recipe.method} recipe={inProgress.recipe} poured={inProgressPoured} />
+                    <BrewGauge methodKey={inProgress.recipe.method} recipe={inProgress.recipe} fillTo={inProgressPourTarget} />
                   </div>
                 </div>
                 <div style={{ padding: "10px 18px 18px" }}>
@@ -1668,7 +1697,7 @@ export default function ChemexBrewCoach() {
                           ? { water: last.water, bloom: last.coffeeDose * 2, pours: METHODS[last.method || "chemex"].pours(last.coffeeDose * 2, last.water) }
                           : { water: 480, bloom: 60, pours: activeMethod.pours(60, 480) }
                       }
-                      poured={last ? last.water : 0}
+                      fillTo={last ? last.water : 0}
                     />
                   </div>
                 </div>
@@ -1939,7 +1968,7 @@ export default function ChemexBrewCoach() {
             <Card style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", gap: 12, alignItems: "flex-start" }}>
                 <div style={{ marginLeft: -8, marginTop: -4 }}>
-                  <BrewGauge methodKey={recipe.method} recipe={recipe} poured={poured} />
+                  <BrewGauge methodKey={recipe.method} recipe={recipe} fillTo={pourTarget} />
                 </div>
                 <div style={{ flex: 1, paddingTop: 4 }}>
                   <Eyebrow>{T.brewScreen.clock}</Eyebrow>
@@ -2002,13 +2031,25 @@ export default function ChemexBrewCoach() {
                 </div>
               )}
 
-              <Button onClick={nextStep} className={autoAdvancePending ? "cbc-pulse" : ""}>
+              {needsManualAdvance && (
+                <div style={{ background: C.warn + "22", border: `1px solid ${C.warn}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5, color: C.ink }}>
+                  {T.brewScreen.manualAdvanceHint}
+                </div>
+              )}
+
+              {isFinishLocked && (
+                <p style={{ fontSize: 12.5, color: C.ink3, margin: "0 0 10px", lineHeight: 1.5 }}>{T.brewScreen.finishLockedHint}</p>
+              )}
+
+              <Button onClick={nextStep} disabled={isFinishLocked} className={autoAdvancePending ? "cbc-pulse" : ""}>
                 {autoAdvancePending
                   ? T.brewScreen.advancingSoon
                   : stepIndex === steps.length - 1
                   ? T.brewScreen.finished
                   : steps[stepIndex].id === "grind"
                   ? T.brewScreen.nextStepStartClock
+                  : needsManualAdvance
+                  ? T.brewScreen.nextStepPoured
                   : T.brewScreen.nextStep}
               </Button>
 
