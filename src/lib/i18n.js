@@ -32,6 +32,8 @@ const sv = {
     continueFromLast: "Fortsätt från förra",
     newFromZero: "Ny bryggning från noll",
     newBrew: "Ny bryggning",
+    tempBrew: "Tillfällig bryggning",
+    tempBrewHint: "Testa en annan böna utan att påverka historiken.",
     loadingBrews: "Läser in sparade bryggningar …",
     inProgressEyebrow: "Pågående bryggning",
     continueBrew: (methodLabel) => `Fortsätt ${methodLabel}-bryggningen`,
@@ -42,6 +44,7 @@ const sv = {
   setup: {
     step: "Steg 1 av 3 · Inställningar",
     heading: "Vad brygger du?",
+    tempBanner: "Tillfällig bryggning: sparas inte i historiken och påverkar inte nästa förslag.",
     roastLevel: "Rostnivå",
     amount: "Mängd",
     gramsMode: "Gram kaffe",
@@ -114,12 +117,14 @@ const sv = {
     noteLabel: "Anteckning, om du vill",
     notePlaceholder: "Nytt kaffe, kallt kök, hällde slarvigt …",
     save: "Spara och få nästa förslag",
+    showSuggestion: "Visa förslag",
     pickBoth: "Välj både smak och tid för att gå vidare.",
     answerLater: "Svara senare",
   },
 
   next: {
     eyebrow: "Nästa bryggning",
+    tempBanner: "Tillfällig bryggning, inget har sparats.",
     changeNothing: "Ändra ingenting.",
     howToAdjust: "Så här justerar du.",
     useSuggestion: "Använd förslaget",
@@ -348,6 +353,8 @@ const en = {
     continueFromLast: "Continue from last time",
     newFromZero: "New brew from scratch",
     newBrew: "New brew",
+    tempBrew: "Temporary brew",
+    tempBrewHint: "Try a different bean without affecting your history.",
     loadingBrews: "Loading saved brews …",
     inProgressEyebrow: "Brew in progress",
     continueBrew: (methodLabel) => `Continue ${methodLabel} Brew`,
@@ -358,6 +365,7 @@ const en = {
   setup: {
     step: "Step 1 of 3 · Settings",
     heading: "What are you brewing?",
+    tempBanner: "Temporary brew: not saved to history and won't affect your next suggestion.",
     roastLevel: "Roast level",
     amount: "Amount",
     gramsMode: "Grams of coffee",
@@ -430,12 +438,14 @@ const en = {
     noteLabel: "Note, if you like",
     notePlaceholder: "New coffee, cold kitchen, sloppy pour …",
     save: "Save and get the next suggestion",
+    showSuggestion: "Show suggestion",
     pickBoth: "Pick both taste and time to continue.",
     answerLater: "Answer later",
   },
 
   next: {
     eyebrow: "Next brew",
+    tempBanner: "Temporary brew, nothing was saved.",
     changeNothing: "Change nothing.",
     howToAdjust: "Here's how to adjust.",
     useSuggestion: "Use the suggestion",
