@@ -898,6 +898,10 @@ export default function ChemexBrewCoach() {
   // pending "svara senare" review) — separate from the live `fb`/`recipe`
   // state, which belongs to the brew actually in progress right now.
   const [editingBrew, setEditingBrew] = useState(null);
+  // A temporary brew (different bean, a one-off cup) runs the normal flow but
+  // never reaches history, the in-progress slot or the grinder confirmation,
+  // so it can't skew the suggestions for the regular coffee.
+  const [tempMode, setTempMode] = useState(false);
   const [editFb, setEditFb] = useState({ taste: null, flow: null, comment: "" });
   const tick = useRef(null);
   const [autoAdvance, setAutoAdvance] = useAutoAdvance();
@@ -943,7 +947,7 @@ export default function ChemexBrewCoach() {
   // so switching methods, or just closing the app, never loses it. Setup
   // alone (no recipe yet) isn't saved: it's just a form, cheap to redo.
   useEffect(() => {
-    if (!recipe || !["recipe", "brew", "feedback"].includes(screen)) return;
+    if (!recipe || recipe.oneOff || !["recipe", "brew", "feedback"].includes(screen)) return;
     const snapshot = { screen, recipe, steps, stepIndex, elapsed, running, fb, actual };
     saveInProgress(recipe.method, snapshot);
     setInProgress(snapshot);
@@ -952,6 +956,9 @@ export default function ChemexBrewCoach() {
   function resumeInProgress() {
     if (!inProgress) return;
     const r = inProgress.recipe;
+    // Only regular brews are ever saved as in-progress, so backing out to
+    // Setup from a resumed brew must not still be in temporary mode.
+    setTempMode(false);
     // Restore cfg to match the resumed recipe, so if the user backs out to
     // Setup it shows the settings that actually produced this brew instead
     // of whatever cfg happened to be left over from something else.
@@ -1273,8 +1280,9 @@ export default function ChemexBrewCoach() {
   // methodKey lets a "continue from"/"use suggestion" shortcut reopen setup
   // under whichever method that source brew actually used, rather than
   // whatever the dropdown currently happens to be on.
-  function openSetup(prefill, methodKey) {
+  function openSetup(prefill, methodKey, { temporary = false } = {}) {
     if (methodKey && methodKey !== method) setMethod(methodKey);
+    setTempMode(temporary);
     setCfg((c) => ({ ...c, ...prefill }));
     goTo("setup");
   }
@@ -1295,10 +1303,20 @@ export default function ChemexBrewCoach() {
     }
   }
 
+  // Another bean, so start from scratch and drop the regular bag's dates. No
+  // in-progress confirm: a temporary brew never touches that slot.
+  function startTemporaryBrew() {
+    openSetup(
+      { grindOffset: 0, temperature: activeMethod.ROASTS[cfg.roast].temp, roastDate: null, bestBefore: null },
+      undefined,
+      { temporary: true }
+    );
+  }
+
   function toRecipe() {
     const dose = cfg.inputMode === "dose" ? cfg.dose : doseFromCups(cfg.cups, cfg.ratio);
     const r = buildRecipe(activeMethod, { ...cfg, dose }, T);
-    setRecipe(r);
+    setRecipe({ ...r, oneOff: tempMode });
     setSteps(buildSteps(activeMethod, r, T));
     goTo("recipe");
   }
@@ -1348,6 +1366,11 @@ export default function ChemexBrewCoach() {
     // taste answer later via editFeedback().
     const fbToSave = pending ? { ...fb, taste: null, pending: true } : { ...fb, pending: false };
     const s = suggest(recipe, fbToSave, T);
+    if (recipe.oneOff) {
+      setResult({ recipe, s });
+      goTo("next");
+      return;
+    }
     const brew = {
       id: `${Date.now()}`,
       date: new Date().toISOString(),
@@ -1441,7 +1464,7 @@ export default function ChemexBrewCoach() {
   // was last explicitly confirmed, or (if nothing has been confirmed since)
   // the last real brew's own setting.
   const grindReferenceOffset = recipe && (confirmedGrindOffset ?? (last ? last.grindOffset : recipe.grindOffset));
-  const grindChangeNeeded = !!(recipe && last && grindReferenceOffset !== recipe.grindOffset);
+  const grindChangeNeeded = !!(recipe && !recipe.oneOff && last && grindReferenceOffset !== recipe.grindOffset);
 
   // When the current step has a known target time (the point the next step
   // should begin), the clock warns as that moment approaches: orange inside
@@ -1763,13 +1786,25 @@ export default function ChemexBrewCoach() {
                       <Button variant="quiet" onClick={() => startNewFromZero()}>
                         {T.home.newFromZero}
                       </Button>
+                      <div style={{ height: 8 }} />
+                      <Button variant="quiet" onClick={startTemporaryBrew}>
+                        {T.home.tempBrew}
+                      </Button>
+                      <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 6, textAlign: "center" }}>{T.home.tempBrewHint}</div>
                     </>
                   ) : (
                     // No brew to continue from, so this is always "from
                     // scratch" — reuses the same reset as newFromZero
                     // rather than leaving cfg.grindOffset at whatever a
                     // now-deleted brew's suggestion last left it at.
-                    <Button onClick={() => startNewFromZero()}>{T.home.newBrew}</Button>
+                    <>
+                      <Button onClick={() => startNewFromZero()}>{T.home.newBrew}</Button>
+                      <div style={{ height: 8 }} />
+                      <Button variant="quiet" onClick={startTemporaryBrew}>
+                        {T.home.tempBrew}
+                      </Button>
+                      <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 6, textAlign: "center" }}>{T.home.tempBrewHint}</div>
+                    </>
                   )}
                 </div>
               </Card>
@@ -1783,6 +1818,7 @@ export default function ChemexBrewCoach() {
           <Card>
             <Eyebrow>{T.setup.step}</Eyebrow>
             <h2 style={{ fontFamily: F.display, fontSize: 22, margin: "10px 0 18px", fontWeight: 400 }}>{T.setup.heading}</h2>
+            {tempMode && <Notice style={{ marginBottom: 18 }}>{T.setup.tempBanner}</Notice>}
 
             <div style={{ fontSize: 13, color: C.ink2, marginBottom: 8 }}>{T.setup.roastLevel}</div>
             {Object.values(activeMethod.ROASTS).map((r) => (
@@ -2132,14 +2168,16 @@ export default function ChemexBrewCoach() {
 
             <div style={{ marginTop: 20 }}>
               <Button onClick={() => saveFeedback(false)} disabled={!fb.taste || !fb.flow}>
-                {T.feedback.save}
+                {recipe.oneOff ? T.feedback.showSuggestion : T.feedback.save}
               </Button>
               {(!fb.taste || !fb.flow) && (
                 <div style={{ fontSize: 12.5, color: C.ink3, marginTop: 8, textAlign: "center" }}>{T.feedback.pickBoth}</div>
               )}
-              <Button variant="plain" onClick={() => saveFeedback(true)} style={{ marginTop: 6 }}>
-                {T.feedback.answerLater}
-              </Button>
+              {!recipe.oneOff && (
+                <Button variant="plain" onClick={() => saveFeedback(true)} style={{ marginTop: 6 }}>
+                  {T.feedback.answerLater}
+                </Button>
+              )}
             </div>
           </Card>
         )}
@@ -2148,6 +2186,7 @@ export default function ChemexBrewCoach() {
         {screen === "next" && result && (
           <Card>
             <Eyebrow>{T.next.eyebrow}</Eyebrow>
+            {result.recipe.oneOff && <Notice style={{ marginTop: 12, marginBottom: 0 }}>{T.next.tempBanner}</Notice>}
             <h2 style={{ fontFamily: F.display, fontSize: 23, margin: "10px 0 12px", fontWeight: 400, lineHeight: 1.3 }}>
               {result.s.grindStep === 0 && result.s.temperature === result.recipe.temperature && result.s.ratio === result.recipe.ratio
                 ? T.next.changeNothing
@@ -2166,7 +2205,7 @@ export default function ChemexBrewCoach() {
               <Row key={r.label} label={r.label} value={r.value} accent={r.changed ? C.collar : C.ink3} />
             ))}
 
-            {result.s.grindStep !== 0 && (
+            {result.s.grindStep !== 0 && !result.recipe.oneOff && (
               <div
                 style={{
                   display: "flex",
@@ -2204,7 +2243,8 @@ export default function ChemexBrewCoach() {
                       roastDate: result.recipe.roastDate || null,
                       bestBefore: result.recipe.bestBefore || null,
                     },
-                    result.recipe.method
+                    result.recipe.method,
+                    { temporary: !!result.recipe.oneOff }
                   )
                 }
               >
