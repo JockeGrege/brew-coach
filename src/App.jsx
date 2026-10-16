@@ -432,6 +432,28 @@ function Card({ children, style }) {
   );
 }
 
+// Highlighted one-line message. color-mix because palette entries are CSS
+// variables, so a hex alpha suffix can't be appended to them.
+function Notice({ children, style }) {
+  return (
+    <div
+      style={{
+        background: `color-mix(in srgb, ${C.warn} 13%, transparent)`,
+        border: `1px solid ${C.warn}`,
+        borderRadius: 8,
+        padding: "10px 12px",
+        marginBottom: 12,
+        fontSize: 13.5,
+        lineHeight: 1.5,
+        color: C.ink,
+        ...style,
+      }}
+    >
+      {children}
+    </div>
+  );
+}
+
 function Button({ children, onClick, variant = "primary", disabled, style, className = "" }) {
   const base = {
     fontFamily: F.ui,
@@ -2032,9 +2054,7 @@ export default function ChemexBrewCoach() {
               )}
 
               {needsManualAdvance && (
-                <div style={{ background: C.warn + "22", border: `1px solid ${C.warn}`, borderRadius: 8, padding: "10px 12px", marginBottom: 12, fontSize: 13.5, lineHeight: 1.5, color: C.ink }}>
-                  {T.brewScreen.manualAdvanceHint}
-                </div>
+                <Notice>{T.brewScreen.manualAdvanceHint}</Notice>
               )}
 
               {isFinishLocked && (
